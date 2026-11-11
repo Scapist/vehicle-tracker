@@ -1,5 +1,6 @@
 import { Route, Routes } from "react-router-dom";
 
+import { AuthGate } from "./components/AuthGate";
 import { QuickLogProvider } from "./components/QuickLog";
 import Shell from "./layout/Shell";
 import Dashboard from "./pages/Dashboard";
@@ -12,6 +13,7 @@ import Vehicles from "./pages/Vehicles";
 
 export default function App() {
   return (
+    <AuthGate>
     <QuickLogProvider>
       <Routes>
         <Route path="/vehicles/:id/history" element={<History />} />
@@ -26,5 +28,6 @@ export default function App() {
         </Route>
       </Routes>
     </QuickLogProvider>
+    </AuthGate>
   );
 }

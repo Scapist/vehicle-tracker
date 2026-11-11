@@ -53,8 +53,8 @@ def cost_by_year(db: Session, vehicle_ids: list[int]) -> dict[int, dict[str, int
     return {y: dict(c) for y, c in sorted(years.items())}
 
 
-def report(db: Session, vehicle_id: int | None, year: int | None) -> dict:
-    ids = [vehicle_id] if vehicle_id else list(db.scalars(select(m.Vehicle.id)))
+def report(db: Session, vehicle_ids: list[int], year: int | None) -> dict:
+    ids = vehicle_ids
     costs = cost_by_year(db, ids)
     kms: dict[int, int] = defaultdict(int)
     for vid in ids:

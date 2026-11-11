@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { expect, test } from "@playwright/test";
 
-import { DATA_DIR, SHOTS_DIR } from "./paths";
+import { DATA_DIR, E2E_EMAIL, E2E_PASSWORD, SHOTS_DIR } from "./paths";
 
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(200, 1)]);
 const PDF = Buffer.from("%PDF-1.4\n%test\n");
@@ -14,6 +14,51 @@ function receiptFiles(): string[] {
   if (!fs.existsSync(root)) return [];
   return fs.readdirSync(root).flatMap((y) => fs.readdirSync(path.join(root, y)));
 }
+
+test("login page: wrong password, then sign in, then sign out", async ({ page }, info) => {
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+  fs.mkdirSync(shots, { recursive: true });
+  await page.screenshot({ path: path.join(shots, `${info.project.name}-light-login-1.jpg`), type: "jpeg", quality: 60 });
+  await page.getByLabel("Email").fill(E2E_EMAIL);
+  await page.getByLabel("Password").fill("not-it");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByText("Wrong email or password")).toBeVisible();
+  await page.getByLabel("Password").fill(E2E_PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+  await page.goto("/settings");
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+});
+
+test("invite link: new person signs up and sees only their own (empty) data", async ({ page, browser }, info) => {
+  await page.request.post("/api/v1/auth/login", { data: { email: E2E_EMAIL, password: E2E_PASSWORD } });
+  const invite = await (await page.request.post("/api/v1/auth/invites")).json();
+  const guest = await browser.newContext({ viewport: page.viewportSize()! });
+  const g = await guest.newPage();
+  try {
+    await g.goto(invite.link);
+    await expect(g.getByRole("heading", { name: "Create your account" })).toBeVisible();
+    await g.screenshot({ path: path.join(shots, `${info.project.name}-light-signup-1.jpg`), type: "jpeg", quality: 60 });
+    await g.getByLabel("Your name").fill("Guest");
+    await g.getByLabel("Email").fill(`guest-${info.project.name}-${Date.now()}@example.com`);
+    await g.getByRole("textbox", { name: /^Password/ }).fill("guest-password-1");
+    await g.getByLabel("Confirm password").fill("guest-password-1");
+    await g.getByRole("button", { name: "Create account" }).click();
+    await expect(g.getByText("No vehicles yet")).toBeVisible();
+    await expect(g.getByText("Civic")).toHaveCount(0);
+    expect((await g.request.get("/api/v1/vehicles/1")).status()).toBe(404);
+  } finally {
+    await guest.close();
+  }
+});
+
+test.describe("signed in", () => {
+  test.beforeEach(async ({ page }) => {
+    const r = await page.request.post("/api/v1/auth/login", { data: { email: E2E_EMAIL, password: E2E_PASSWORD } });
+    expect(r.ok()).toBe(true);
+  });
 
 test("dashboard loads with vehicle and alerts", async ({ page }) => {
   await page.goto("/");
@@ -56,7 +101,8 @@ test("mileage: lower value needs correction", async ({ page }) => {
   await expect(page.getByText("Lower than the current reading")).toBeVisible();
 });
 
-test("Quick log: switching vehicle does not keep the old vehicle's odometer", async ({ page, request }) => {
+test("Quick log: switching vehicle does not keep the old vehicle's odometer", async ({ page }) => {
+  const request = page.request;
   const nick = `Truck${Date.now()}`;
   const v = await (await request.post("/api/v1/vehicles", {
     data: { nickname: nick, make: "Ford", model: "F150", year: 2015 },
@@ -109,3 +155,4 @@ for (const scheme of ["light", "dark"] as const) {
     await snap("quicklog-service", 1);
   });
 }
+});

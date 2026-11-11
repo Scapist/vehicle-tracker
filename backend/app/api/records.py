@@ -8,20 +8,25 @@ from sqlalchemy.orm import Session
 
 from app import models as m
 from app import schemas as s
+from app.api.deps import owned_attachment, owned_service, owned_vehicle
+from app.auth import current_user
 from app.clock import today_local
 from app.db import get_db
 from app.services import evaluator_hook, records, views
 
 router = APIRouter(tags=["services"])
+MAX_FILES = 10
+MAX_ATTACHMENTS = 30
 
 
 @router.get("/service-types", response_model=list[s.ServiceTypeOut])
-def service_types(db: Session = Depends(get_db)):
+def service_types(user: m.User = Depends(current_user), db: Session = Depends(get_db)):
     return list(db.scalars(select(m.ServiceType).order_by(m.ServiceType.name)))
 
 
 @router.get("/vehicles/{vehicle_id}/services", response_model=list[s.ServiceOut])
-def list_services(vehicle_id: int, db: Session = Depends(get_db)):
+def list_services(vehicle_id: int, user: m.User = Depends(current_user), db: Session = Depends(get_db)):
+    owned_vehicle(db, user, vehicle_id)
     q = (select(m.ServiceRecord).where(m.ServiceRecord.vehicle_id == vehicle_id)
          .order_by(m.ServiceRecord.date.desc(), m.ServiceRecord.id.desc()))
     return [views.service_out(db, r) for r in db.scalars(q)]
@@ -33,15 +38,15 @@ async def create_service(
     on: date = Form(alias="date"),
     odometer_km: int | None = Form(default=None, ge=0),
     cost_cents: int = Form(default=0, ge=0),
-    vendor: str | None = Form(default=None),
-    notes: str | None = Form(default=None),
+    vendor: str | None = Form(default=None, max_length=120),
+    notes: str | None = Form(default=None, max_length=5000),
     type_ids: list[int] = Form(default=[]),
     item_costs: str | None = Form(default=None, description="JSON map of service_type_id -> cents"),
     files: list[UploadFile] = File(default=[]),
+    user: m.User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    if not db.get(m.Vehicle, vehicle_id):
-        raise HTTPException(404, "Vehicle not found")
+    owned_vehicle(db, user, vehicle_id)
     if on > today_local():
         raise HTTPException(422, "The service date can't be in the future")
     try:
@@ -55,9 +60,11 @@ async def create_service(
     known = set(db.scalars(select(m.ServiceType.id)))
     if any(t not in known for t in type_ids):
         raise HTTPException(422, "Unknown service type")
+    if len(files) > MAX_FILES:
+        raise HTTPException(422, f"Attach at most {MAX_FILES} files at a time")
     uploads = []
     for f in files:
-        data = await f.read()
+        data = await f.read(records.MAX_UPLOAD + 1)  # never read more than the cap into memory
         if records.sniff_mime(data) is None or len(data) > records.MAX_UPLOAD:
             raise HTTPException(422, f"{f.filename}: use a JPEG, PNG, WebP, HEIC or PDF under 20 MB")
         uploads.append((f.filename or "receipt", data))
@@ -67,15 +74,13 @@ async def create_service(
         records.save_attachment(db, rec, name, data)
     db.commit()
     db.refresh(rec)
-    evaluator_hook.after_change(db)
+    evaluator_hook.after_change(db, user.id)
     return views.service_out(db, rec)
 
 
 @router.delete("/services/{service_id}", status_code=204)
-def delete_service(service_id: int, db: Session = Depends(get_db)):
-    rec = db.get(m.ServiceRecord, service_id)
-    if not rec:
-        raise HTTPException(404)
+def delete_service(service_id: int, user: m.User = Depends(current_user), db: Session = Depends(get_db)):
+    rec = owned_service(db, user, service_id)
     for att in rec.attachments:
         try:
             records.attachment_path(att).unlink()
@@ -86,12 +91,13 @@ def delete_service(service_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/services/{service_id}/attachments", response_model=s.AttachmentOut, status_code=201)
-async def add_attachment(service_id: int, file: UploadFile = File(), db: Session = Depends(get_db)):
-    rec = db.get(m.ServiceRecord, service_id)
-    if not rec:
-        raise HTTPException(404)
+async def add_attachment(service_id: int, file: UploadFile = File(), user: m.User = Depends(current_user),
+                         db: Session = Depends(get_db)):
+    rec = owned_service(db, user, service_id)
     try:
-        att = records.save_attachment(db, rec, file.filename or "receipt", await file.read())
+        if len(rec.attachments) >= MAX_ATTACHMENTS:
+            raise records.UploadError(f"A service can have at most {MAX_ATTACHMENTS} receipts")
+        att = records.save_attachment(db, rec, file.filename or "receipt", await file.read(records.MAX_UPLOAD + 1))
     except records.UploadError as e:
         raise HTTPException(422, str(e))
     db.commit()
@@ -99,13 +105,16 @@ async def add_attachment(service_id: int, file: UploadFile = File(), db: Session
 
 
 @router.get("/attachments/{attachment_id}")
-def get_attachment(attachment_id: int, download: bool = False, db: Session = Depends(get_db)):
-    att = db.get(m.Attachment, attachment_id)
-    if not att:
-        raise HTTPException(404)
+def get_attachment(attachment_id: int, download: bool = False, user: m.User = Depends(current_user),
+                   db: Session = Depends(get_db)):
+    att = owned_attachment(db, user, attachment_id)
     try:
         path = records.attachment_path(att)
     except FileNotFoundError:
         raise HTTPException(404, "File is missing from disk")
+    headers = {"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=3600"}
+    if att.mime.startswith("image/"):
+        # an image never needs to run anything
+        headers["Content-Security-Policy"] = "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'"
     return FileResponse(path, media_type=att.mime, filename=att.orig_name if download else None,
-                        content_disposition_type="attachment" if download else "inline")
+                        content_disposition_type="attachment" if download else "inline", headers=headers)

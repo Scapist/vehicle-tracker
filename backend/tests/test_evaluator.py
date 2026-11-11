@@ -64,10 +64,10 @@ def test_new_cycle_after_service(demo):
     assert count(demo, "Oil change") == 2
 
 
-def test_snooze_suppresses_then_realerts_once(demo):
+def test_snooze_suppresses_then_realerts_once(demo, user):
     evaluate(demo)
     count = len(outbox(demo))
-    snooze_subject(demo, "rule:1", 7)
+    snooze_subject(demo, user, "rule:1", 7)
     assert evaluate(demo) == 0
     later = now_utc() + dt.timedelta(days=8)
     assert evaluate(demo, now=later) == 1
@@ -77,11 +77,11 @@ def test_snooze_suppresses_then_realerts_once(demo):
     assert len(outbox(demo)) == count + 1
 
 
-def test_snoozed_item_crossing_to_overdue_waits(demo):
+def test_snoozed_item_crossing_to_overdue_waits(demo, user):
     odometer.add_reading(demo, 1, 91_200)
     evaluate(demo)  # tire rotation due soon, alerted
     rot = demo.scalar(select(m.ReminderRule).join(m.ServiceType).where(m.ServiceType.key == "tire_rotation"))
-    snooze_subject(demo, f"rule:{rot.id}", 7)
+    snooze_subject(demo, user, f"rule:{rot.id}", 7)
     odometer.add_reading(demo, 1, 92_500)
     before = len(outbox(demo))
     evaluate(demo)
@@ -96,7 +96,7 @@ def test_outbox_dedupe_and_retry(db):
     class Flaky:
         calls = 0
 
-        def send(self, title, body, actions=None):
+        def send(self, title, body, actions=None, recipient=None):
             Flaky.calls += 1
             if Flaky.calls < 3:
                 raise RuntimeError("network down")

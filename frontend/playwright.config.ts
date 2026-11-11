@@ -2,7 +2,7 @@ import fs from "node:fs";
 
 import { defineConfig, devices } from "@playwright/test";
 
-import { DATA_DIR } from "./e2e/paths";
+import { DATA_DIR, E2E_PASSWORD } from "./e2e/paths";
 // workers re-evaluate this file while the server holds the DB open, so only the main process wipes it
 if (!process.env.TEST_WORKER_INDEX) fs.rmSync(DATA_DIR, { recursive: true, force: true });
 
@@ -17,7 +17,7 @@ export default defineConfig({
       "uv run alembic upgrade head && uv run python -m app.seed --demo && uv run uvicorn app.main:app --port 8123",
     cwd: "../backend",
     url: "http://127.0.0.1:8123/healthz",
-    env: { DATA_DIR, NOTIFIER: "log" },
+    env: { DATA_DIR, NOTIFIER: "log", DEMO_PASSWORD: E2E_PASSWORD },
     reuseExistingServer: false,
     timeout: 120_000,
   },

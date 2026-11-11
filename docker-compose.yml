@@ -9,3 +9,9 @@ services:
     volumes:
       - ./data:/data
     restart: unless-stopped
+    mem_limit: 512m
+    cap_drop: [ALL]
+    # only what the entrypoint needs to hand ./data to the app user and then switch to it
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID]
+    security_opt:
+      - no-new-privileges:true

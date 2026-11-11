@@ -17,41 +17,84 @@ docker compose up -d --build
 Open <http://localhost:8000>. API docs are at `/docs`. Data lives in `./data` (SQLite file + `receipts/`).
 The database is migrated automatically on start. The first vehicle is added in the app (Vehicles → Add vehicle).
 
-### Reach it from your phone (LAN)
+### Accounts
 
-By default the port is bound to `127.0.0.1`. Set your server's LAN IP in `.env`:
+Each person has their own account and their own, completely separate vehicles, records and receipts.
 
-```
-BIND_ADDR=192.168.1.50
-```
+1. **First start.** With no accounts yet, the server prints a one-time setup code in its log:
 
-The app has **no login**; keep it on the LAN. If you expose it further, put a reverse proxy with auth in front.
-Caddy example with basic auth (`caddy hash-password` makes the hash):
+   ```sh
+   docker compose logs tracker | grep -A1 "setup code"
+   ```
 
-```
-tracker.home.lan {
-    basicauth {
-        me <hashed-password>
-    }
-    reverse_proxy 127.0.0.1:8000
-}
-```
+   Open the app, enter that code and create your account. You become the **owner**. Anything entered before
+   accounts existed (from an older version) is attached to this account.
+2. **Inviting someone.** In Settings → *Invite people*, create a link and send it to them. Each link makes one
+   account and expires after 7 days. There is no open sign-up.
+3. **Signing in** keeps a device signed in for 30 days. Changing your password signs out your other devices;
+   *Sign out on all devices* does the same without a password change. After five wrong passwords, sign-in from
+   that device or for that email is paused for a growing time (30 s up to 15 min).
+
+Passwords are stored as salted scrypt hashes. Nothing about accounts lives in `.env`.
+
+### Reach it from your phone
+
+The login protects your data, but traffic on plain `http://` is unencrypted on your Wi-Fi.
+By default the app only listens on `127.0.0.1`, so only the machine running it can open it.
+It only answers to host names in `ALLOWED_HOSTS` (default `localhost,127.0.0.1`) and refuses cross-site
+writes, so a website you visit can't use your browser to change or read your data.
+
+Pick one way to reach it from your phone:
+
+- **Tailscale (recommended).** Install Tailscale on the server and your phone, keep `BIND_ADDR=127.0.0.1`,
+  and run `tailscale serve --bg 8000` on the server. Add the server's tailnet name to `ALLOWED_HOSTS`
+  (e.g. `ALLOWED_HOSTS=localhost,127.0.0.1,myserver.tailnet-name.ts.net`). Only your own devices can reach it,
+  over an encrypted connection, from anywhere.
+- **Straight on the LAN.** Set `BIND_ADDR` and add the same address to `ALLOWED_HOSTS`:
+
+  ```
+  BIND_ADDR=192.168.1.50
+  ALLOWED_HOSTS=localhost,127.0.0.1,192.168.1.50
+  ```
+
+  Devices on your Wi-Fi then need the password, but traffic (including the password when you sign in) is
+  unencrypted plain HTTP. Fine on a home network you trust; put guests and IoT devices on a separate guest network.
+- **Reverse proxy with a password.** Keep `BIND_ADDR=127.0.0.1` (otherwise the proxy can be bypassed on port 8000)
+  and let only the proxy listen on the LAN. Caddy example (`caddy hash-password` makes the hash):
+
+  ```
+  tracker.home.lan {
+      basicauth {
+          me <hashed-password>
+      }
+      reverse_proxy 127.0.0.1:8000
+  }
+  ```
+
+  Add `tracker.home.lan` to `ALLOWED_HOSTS`. Any name you open the app by must be listed there: it is also
+  how the app recognises its own pages when a proxy rewrites the `Host` header (nginx does by default).
+  If the proxy runs on another machine or in another container, also set `FORWARDED_ALLOW_IPS` to the proxy's
+  IP, so sign-in limits apply to each real device rather than to the proxy as a whole.
 
 On a phone, use "Add to Home Screen" to install it as an app.
+
+The app runs as an unprivileged user (uid 10001). On start, the container hands `./data` to that user if needed
+(for example when it was created by your own account or an older image), then drops all privileges.
+Before applying a database migration it saves a copy in `data/backups/`.
 
 ## Telegram
 
 1. Create a bot with [@BotFather](https://t.me/BotFather) and copy the token.
-2. Find your chat ID (message [@userinfobot](https://t.me/userinfobot)).
-3. In `.env`:
+2. In `.env`, then `docker compose up -d`:
 
-```
-NOTIFIER=telegram
-TELEGRAM_BOT_TOKEN=123456:ABC...
-TELEGRAM_ALLOWED_CHAT_IDS=111111111          # comma-separated; everyone else is ignored
-```
+   ```
+   NOTIFIER=telegram
+   TELEGRAM_BOT_TOKEN=123456:ABC...
+   ```
 
-4. `docker compose up -d` again.
+3. Each person links their own Telegram: in the app, Settings → Telegram → **Connect** shows a code; send
+   `/link CODE` to the bot. The bot then answers that chat as that account (their vehicles only) and sends
+   their alerts there. Unlinked chats only get instructions on how to link, and group chats are ignored.
 
 The bot uses long polling, so no public URL is needed. What it understands:
 

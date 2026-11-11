@@ -1,4 +1,7 @@
-"""Bot behaviour as plain functions: text in, Reply out. Telegram glue lives in runner.py."""
+"""Bot behaviour as plain functions: text in, Reply out. Telegram glue lives in runner.py.
+
+Every function acts for one account (`user`, found from the Telegram chat) and only ever touches that
+account's vehicles. Button data carries raw ids, so each callback re-checks ownership before acting."""
 from dataclasses import dataclass, field
 from datetime import timedelta
 
@@ -6,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import models as m
+from app.api.deps import find_owned_vehicle
 from app.bot.parser import guess_vehicle, parse_mileage
 from app.clock import today_local
 from app.domain.due import roll_yearly
@@ -22,16 +26,23 @@ class Reply:
     buttons: list[tuple[str, str]] = field(default_factory=list)  # (label, callback_data)
 
 
-def _vehicles(db: Session) -> list[m.Vehicle]:
-    return list(db.scalars(select(m.Vehicle).where(m.Vehicle.archived.is_(False)).order_by(m.Vehicle.nickname)))
+GONE = Reply("That's no longer available.")
 
 
-def _picker(db: Session, km: int, exclude: int | None = None) -> list[tuple[str, str]]:
-    return [(v.nickname, f"km:{v.id}:{km}") for v in _vehicles(db) if v.id != exclude]
+def _vehicles(db: Session, user: m.User) -> list[m.Vehicle]:
+    return list(db.scalars(select(m.Vehicle).where(m.Vehicle.user_id == user.id, m.Vehicle.archived.is_(False))
+                           .order_by(m.Vehicle.nickname)))
 
 
-def handle_text(db: Session, text: str) -> Reply:
-    vehicles = _vehicles(db)
+_vehicle = find_owned_vehicle
+
+
+def _picker(db: Session, user: m.User, km: int, exclude: int | None = None) -> list[tuple[str, str]]:
+    return [(v.nickname, f"km:{v.id}:{km}") for v in _vehicles(db, user) if v.id != exclude]
+
+
+def handle_text(db: Session, user: m.User, text: str) -> Reply:
+    vehicles = _vehicles(db, user)
     if not vehicles:
         return Reply("No vehicles yet. Add one in the app first.")
     p = parse_mileage(text, [v.nickname for v in vehicles])
@@ -42,12 +53,14 @@ def handle_text(db: Session, text: str) -> Reply:
     else:
         vid = guess_vehicle(p.km, [(v.id, odometer.current_km(db, v.id)) for v in vehicles])
     if vid is None:
-        return Reply(f"Which vehicle is {p.km:,} km?", _picker(db, p.km))
-    return log_km(db, vid, p.km, confirmed=False)
+        return Reply(f"Which vehicle is {p.km:,} km?", _picker(db, user, p.km))
+    return log_km(db, user, vid, p.km, confirmed=False)
 
 
-def log_km(db: Session, vid: int, km: int, confirmed: bool, correction: bool = False) -> Reply:
-    v = db.get(m.Vehicle, vid)
+def log_km(db: Session, user: m.User, vid: int, km: int, confirmed: bool, correction: bool = False) -> Reply:
+    v = _vehicle(db, user, vid)
+    if not v:
+        return GONE
     cur = odometer.current_km(db, vid)
     if cur is not None and km < cur and not correction:
         return Reply(f"{km:,} km is below {v.nickname}'s current {cur:,} km. Is that a correction?",
@@ -59,7 +72,7 @@ def log_km(db: Session, vid: int, km: int, confirmed: bool, correction: bool = F
         r = odometer.add_reading(db, vid, km, "telegram", is_correction=correction)
     except odometer.OdometerError as e:
         return Reply(str(e))
-    evaluator_hook.after_change(db)
+    evaluator_hook.after_change(db, user.id)
     delta = f" (+{km - cur:,} km)" if cur is not None and km > cur else ""
     text = f"Logged {km:,} km for {v.nickname}{delta}."
     worst = [i for i in status.vehicle_items(db, vid, today_local()) if i.status in ("overdue", "due_soon")
@@ -69,7 +82,7 @@ def log_km(db: Session, vid: int, km: int, confirmed: bool, correction: bool = F
     return Reply(text, [("Wrong vehicle", f"wrong:{r.id}")])
 
 
-def handle_callback(db: Session, data: str) -> Reply:
+def handle_callback(db: Session, user: m.User, data: str) -> Reply:
     parts = data.split(":")
     kind = parts[0]
     try:
@@ -77,70 +90,78 @@ def handle_callback(db: Session, data: str) -> Reply:
             return Reply("Okay, nothing logged.")
         if kind in ("km", "ok", "corr"):
             vid, km = int(parts[1]), int(parts[2])
-            return log_km(db, vid, km, confirmed=True, correction=kind == "corr")
+            # a vehicle picked from the "which vehicle?" list still gets the big-jump check
+            return log_km(db, user, vid, km, confirmed=kind == "ok", correction=kind == "corr")
         if kind == "wrong":
             r = db.get(m.OdometerReading, int(parts[1]))
-            if not r:
+            if not r or not _vehicle(db, user, r.vehicle_id):
                 return Reply("That reading is already gone.")
             km, old = r.km, r.vehicle_id
             db.delete(r)
             db.commit()
-            return Reply(f"Removed. Which vehicle is {km:,} km?", _picker(db, km, exclude=old))
+            return Reply(f"Removed. Which vehicle is {km:,} km?", _picker(db, user, km, exclude=old))
         if kind == "done" and parts[1] == "rule":
             from app.api.rules import mark_rule_done
             rule = db.get(m.ReminderRule, int(parts[2]))
-            if not rule:
+            if not rule or not _vehicle(db, user, rule.vehicle_id):
                 return Reply("That reminder no longer exists.")
-            if status.rule_anchor(db, rule) and status.rule_anchor(db, rule).date == today_local():
+            anchor = status.rule_anchor(db, rule)
+            if anchor and anchor.date == today_local():
                 return Reply(f"{rule.service_type.name} is already logged as done today.")  # double tap
             rec = mark_rule_done(db, rule)
             km = f" at {rec.odometer_km:,} km" if rec.odometer_km else ""
             return Reply(f"Logged {rule.service_type.name} as done today{km}.", [("Undo", f"undo:{rec.id}")])
         if kind == "done" and parts[1] == "date":
             di = db.get(m.DateItem, int(parts[2]))
-            if not di:
+            if not di or di.user_id != user.id:
                 return Reply("That item no longer exists.")
+            title = di.title
             if di.recurs_yearly:
                 di.due_date = roll_yearly(di.due_date, today_local())
             else:
                 db.delete(di)
             db.commit()
-            evaluator_hook.after_change(db)
-            return Reply(f"Marked '{di.title}' done.")
+            evaluator_hook.after_change(db, user.id)
+            return Reply(f"Marked '{title}' done.")
         if kind == "undo":
             rec = db.get(m.ServiceRecord, int(parts[1]))
             # only undo a bare "done today" entry from the bot, never an older or detailed visit
-            if rec and rec.date == today_local() and rec.cost_cents == 0 and not rec.attachments and not rec.vendor:
+            if (rec and _vehicle(db, user, rec.vehicle_id) and rec.date == today_local() and rec.cost_cents == 0
+                    and not rec.attachments and not rec.vendor):
                 db.delete(rec)
                 db.commit()
-                evaluator_hook.after_change(db)
+                evaluator_hook.after_change(db, user.id)
             return Reply("Undone.")
         if kind == "snooze":
             from app.api.rules import snooze_subject
-            snooze_subject(db, f"{parts[1]}:{parts[2]}", int(parts[3]))
+            snooze_subject(db, user, f"{parts[1]}:{parts[2]}", int(parts[3]))  # 404s if not this user's
             return Reply(f"Snoozed for {parts[3]} days.")
         if kind == "rmove":
             rec = db.get(m.ServiceRecord, int(parts[1]))
-            v = db.get(m.Vehicle, int(parts[2]))
-            if not rec or not v:
+            v = _vehicle(db, user, int(parts[2]))
+            if not rec or not v or not _vehicle(db, user, rec.vehicle_id):
                 return Reply("Couldn't find that.")
             rec.vehicle_id = v.id
             db.commit()
             return Reply(f"Moved the receipt to {v.nickname}.")
     except (IndexError, ValueError):
         pass
-    except Exception as e:  # noqa: BLE001 - never crash the bot on a stale button
+    except Exception as e:  # noqa: BLE001 - never crash the bot on a stale or foreign button
         return Reply(f"That didn't work ({getattr(e, 'detail', e)}).")
     return Reply("I didn't understand that button.")
 
 
-def handle_attachment(db: Session, filename: str, data: bytes) -> Reply:
+def handle_attachment(db: Session, user: m.User, filename: str, data: bytes) -> Reply:
     if records.sniff_mime(data) is None:
         return Reply("I can only file JPEG, PNG, WebP, HEIC or PDF receipts.")
     if len(data) > records.MAX_UPLOAD:
         return Reply("That file is over 20 MB.")
+    vehicles = _vehicles(db, user)
+    if not vehicles:
+        return Reply("No vehicles yet. Add one in the app first.")
     today = today_local()
     recent = db.scalar(select(m.ServiceRecord).where(
+        m.ServiceRecord.vehicle_id.in_([v.id for v in vehicles]),
         m.ServiceRecord.date >= today - timedelta(days=RECENT_VISIT_DAYS))
         .order_by(m.ServiceRecord.date.desc(), m.ServiceRecord.id.desc()))
     if recent:
@@ -148,9 +169,6 @@ def handle_attachment(db: Session, filename: str, data: bytes) -> Reply:
         db.commit()
         v = db.get(m.Vehicle, recent.vehicle_id)
         return Reply(f"Attached to {v.nickname}'s service on {recent.date:%b} {recent.date.day}.")
-    vehicles = _vehicles(db)
-    if not vehicles:
-        return Reply("No vehicles yet. Add one in the app first.")
     vid = max(vehicles, key=lambda v: odometer.valid_readings(db, v.id)[-1].recorded_at.timestamp()
               if odometer.valid_readings(db, v.id) else 0).id
     rec = records.log_service(db, vid, today, None, 0, None, "Receipt only (from Telegram)", [], commit=False)
@@ -162,9 +180,9 @@ def handle_attachment(db: Session, filename: str, data: bytes) -> Reply:
                  "You can add details in the app.", buttons)
 
 
-def cmd_due(db: Session) -> Reply:
+def cmd_due(db: Session, user: m.User) -> Reply:
     lines = []
-    for i in sorted(status.all_items(db, today_local()), key=lambda i: ORDER[i.status]):
+    for i in sorted(status.all_items(db, today_local(), user_id=user.id), key=lambda i: ORDER[i.status]):
         if i.status in ("overdue", "due_soon") and not i.informational:
             v = db.get(m.Vehicle, i.vehicle_id) if i.vehicle_id else None
             icon = "⛔" if i.status == "overdue" else "⚠️"
@@ -172,9 +190,9 @@ def cmd_due(db: Session) -> Reply:
     return Reply("\n".join(lines) or "Nothing due. ✅")
 
 
-def cmd_vehicles(db: Session) -> Reply:
+def cmd_vehicles(db: Session, user: m.User) -> Reply:
     lines = [f"{v.nickname} ({v.year} {v.make} {v.model}): "
-             f"{(odometer.current_km(db, v.id) or 0):,} km" for v in _vehicles(db)]
+             f"{(odometer.current_km(db, v.id) or 0):,} km" for v in _vehicles(db, user)]
     return Reply("\n".join(lines) or "No vehicles yet.")
 
 
@@ -182,6 +200,22 @@ HELP = ("Send your odometer reading, e.g. `84500`, `84,500 km`, `84.5k` or `civi
         "Send a photo or PDF to file a receipt.\n"
         "/due: what needs attention\n/vehicles: current mileage")
 
+NOT_LINKED = ("This chat isn't linked to an account yet. In the app, open Settings → Telegram → "
+              "Connect, then send the /link command it shows you here.")
 
-def cmd_help(db: Session) -> Reply:
+
+def cmd_help(db: Session, user: m.User) -> Reply:
     return Reply(HELP)
+
+
+def cmd_link(db: Session, chat_id: int, code: str) -> Reply:
+    from app.auth import consume_link_code
+
+    user = consume_link_code(db, code, chat_id)
+    if not user:
+        return Reply("That code is wrong or expired. Get a new one in the app under Settings → Telegram.")
+    return Reply(f"Linked to {user.name}'s account. Alerts for your vehicles will come here.\n\n{HELP}")
+
+
+def user_for_chat(db: Session, chat_id: int) -> m.User | None:
+    return db.scalar(select(m.User).where(m.User.telegram_chat_id == chat_id))

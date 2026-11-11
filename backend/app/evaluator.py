@@ -31,18 +31,32 @@ def _message(db: Session, item: StatusItem, realert: bool) -> tuple[str, str, li
                                 Action("Snooze 7 d", f"snooze:{sid}:7")]
 
 
-def evaluate(db: Session, today=None, now: datetime | None = None) -> int:
-    """Returns how many alerts were queued."""
+def _recipient(item: StatusItem) -> str:
+    """Alerts are addressed to the owning account; the chat is looked up when sending (resolve_recipient)."""
+    return f"user:{item.owner_id}"
+
+
+def resolve_recipient(db: Session, recipient: str | None) -> str | None:
+    """'user:12' -> that account's Telegram chat id right now, or None (held until they link one)."""
+    if not recipient or not recipient.startswith("user:"):
+        return None
+    user = db.get(m.User, int(recipient.split(":", 1)[1]))
+    return str(user.telegram_chat_id) if user and user.telegram_chat_id else None
+
+
+def evaluate(db: Session, today=None, now: datetime | None = None, user_id: int | None = None) -> int:
+    """Returns how many alerts were queued. Everyone's items, or one account's when user_id is given."""
     today = today or today_local()
     now = now or now_utc()
     queued = 0
     try:
-        items = all_items(db, today)
+        items = all_items(db, today, user_id=user_id)
     except Exception:  # noqa: BLE001 - e.g. one bad rule; log it rather than stop all alerting
         log.exception("could not compute status items")
         return 0
     for item in items:
-        if item.informational:
+        # informational items never alert; ownerless (pre-accounts) data is evaluated once the owner claims it
+        if item.informational or item.owner_id is None:
             continue
         st = db.scalar(select(m.AlertState).where(m.AlertState.subject == item.subject,
                                                   m.AlertState.cycle_key == item.cycle_key))
@@ -58,11 +72,13 @@ def evaluate(db: Session, today=None, now: datetime | None = None) -> int:
             st.status, st.changed_at = item.status, now
             if sev > prev_sev and not snoozed:
                 t, b, a = _message(db, item, False)
-                queued += enqueue(db, "vehicle-tracker", f"{item.subject}|{item.cycle_key}|{item.status}", t, b, a)
+                queued += enqueue(db, "vehicle-tracker", f"{item.subject}|{item.cycle_key}|{item.status}", t, b, a,
+                                  recipient=_recipient(item))
         elif sev and st.snoozed_until is not None and not snoozed and not st.realerted:
             st.realerted = True
             t, b, a = _message(db, item, True)
             queued += enqueue(db, "vehicle-tracker",
-                              f"{item.subject}|{item.cycle_key}|realert|{st.snoozed_until.isoformat()}", t, b, a)
+                              f"{item.subject}|{item.cycle_key}|realert|{st.snoozed_until.isoformat()}", t, b, a,
+                              recipient=_recipient(item))
     db.commit()
     return queued

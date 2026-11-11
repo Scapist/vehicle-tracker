@@ -20,6 +20,10 @@ export async function api<T = void>(path: string, init: RequestInit & { json?: u
     headers,
     body: json !== undefined ? JSON.stringify(json) : rest.body,
   });
+  if (res.status === 401 && !path.startsWith("/auth/")) {
+    // session expired or signed out elsewhere: show the login page
+    window.dispatchEvent(new Event("auth:required"));
+  }
   if (!res.ok) {
     let body: unknown = null;
     try {

@@ -29,6 +29,7 @@ class StatusItem:
     cycle_key: str
     informational: bool = False
     km_remaining: int | None = None
+    owner_id: int | None = None  # the account the item belongs to (alerts go to them)
 
 
 def rule_anchor(db: Session, rule: m.ReminderRule) -> Anchor | None:
@@ -82,10 +83,20 @@ def date_item_status(di: m.DateItem, today: date) -> StatusItem:
                       di.due_date.isoformat(), informational=di.informational)
 
 
-def all_items(db: Session, today: date) -> list[StatusItem]:
+def all_items(db: Session, today: date, user_id: int | None = None) -> list[StatusItem]:
+    """Every user's items (for the evaluator), or only one user's when user_id is given."""
     out: list[StatusItem] = []
-    for v in db.scalars(select(m.Vehicle).where(m.Vehicle.archived.is_(False))):
-        out += vehicle_items(db, v.id, today)
-    for di in db.scalars(select(m.DateItem).where(m.DateItem.vehicle_id.is_(None))):
-        out.append(date_item_status(di, today))
+    vq = select(m.Vehicle).where(m.Vehicle.archived.is_(False))
+    dq = select(m.DateItem).where(m.DateItem.vehicle_id.is_(None))
+    if user_id is not None:
+        vq = vq.where(m.Vehicle.user_id == user_id)
+        dq = dq.where(m.DateItem.user_id == user_id)
+    for v in db.scalars(vq):
+        for item in vehicle_items(db, v.id, today):
+            item.owner_id = v.user_id
+            out.append(item)
+    for di in db.scalars(dq):
+        item = date_item_status(di, today)
+        item.owner_id = di.user_id
+        out.append(item)
     return out

@@ -4,7 +4,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from app.clock import tz
 from app.db import SessionLocal
-from app.evaluator import evaluate
+from app.evaluator import evaluate, resolve_recipient
+from app.notify.base import TelegramNotifier
 from app.notify.factory import get_notifier
 from app.notify.outbox import dispatch
 
@@ -20,7 +21,11 @@ def run_evaluate() -> None:
 
 def run_dispatch() -> None:
     with SessionLocal() as db:
-        dispatch(db, get_notifier())
+        notifier = get_notifier()
+        if isinstance(notifier, TelegramNotifier):
+            dispatch(db, notifier, resolve=lambda r: resolve_recipient(db, r))
+        else:
+            dispatch(db, notifier)  # log mode: write everything to the log
 
 
 def start() -> BackgroundScheduler:

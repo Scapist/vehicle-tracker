@@ -32,7 +32,7 @@ def test_evaluator_failure_never_breaks_a_write(demo_client, monkeypatch):
         raise RuntimeError("evaluator exploded")
 
     monkeypatch.setattr("app.evaluator.evaluate", boom)
-    evaluator_hook.after_change(_FakeDb())  # must not raise
+    evaluator_hook.after_change(_FakeDb(), 1)  # must not raise
     r = demo_client.post("/api/v1/vehicles/1/odometer", json={"km": 84600})
     assert r.status_code == 201
 
@@ -134,16 +134,16 @@ def test_yearly_roll_forward_never_lands_in_the_past():
     assert roll_yearly(dt.date(2026, 11, 20), TODAY) == dt.date(2027, 11, 20)
 
 
-def test_done_today_is_idempotent_and_stale_undo_is_harmless(demo):
+def test_done_today_is_idempotent_and_stale_undo_is_harmless(demo, user):
     rule = demo.scalar(select(m.ReminderRule).join(m.ServiceType).where(m.ServiceType.key == "oil"))
-    first = logic.handle_callback(demo, f"done:rule:{rule.id}")
-    second = logic.handle_callback(demo, f"done:rule:{rule.id}")  # double tap
+    first = logic.handle_callback(demo, user, f"done:rule:{rule.id}")
+    second = logic.handle_callback(demo, user, f"done:rule:{rule.id}")  # double tap
     assert "Logged" in first.text and "already logged" in second.text
     todays = [r for r in demo.scalars(select(m.ServiceRecord)) if r.date == TODAY]
     assert len(todays) == 1
     # an old, detailed visit must not be deletable via a stale Undo button
     old = demo.scalar(select(m.ServiceRecord).where(m.ServiceRecord.vendor == "Jiffy Lube"))
-    logic.handle_callback(demo, f"undo:{old.id}")
+    logic.handle_callback(demo, user, f"undo:{old.id}")
     assert demo.get(m.ServiceRecord, old.id) is not None
 
 

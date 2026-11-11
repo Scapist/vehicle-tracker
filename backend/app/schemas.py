@@ -10,18 +10,18 @@ class ORM(BaseModel):
 
 class VehicleIn(BaseModel):
     nickname: str = Field(min_length=1, max_length=60)
-    make: str
-    model: str
+    make: str = Field(min_length=1, max_length=60)
+    model: str = Field(min_length=1, max_length=60)
     year: int = Field(ge=1900, le=2100)
-    vin: str | None = None
+    vin: str | None = Field(default=None, max_length=32)
 
 
 class VehiclePatch(BaseModel):
-    nickname: str | None = None
-    make: str | None = None
-    model: str | None = None
-    year: int | None = None
-    vin: str | None = None
+    nickname: str | None = Field(default=None, min_length=1, max_length=60)
+    make: str | None = Field(default=None, min_length=1, max_length=60)
+    model: str | None = Field(default=None, min_length=1, max_length=60)
+    year: int | None = Field(default=None, ge=1900, le=2100)
+    vin: str | None = Field(default=None, max_length=32)
     archived: bool | None = None
 
 

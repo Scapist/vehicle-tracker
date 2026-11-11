@@ -1,4 +1,5 @@
 """Seed service types always; demo data only via `python -m app.seed --demo`."""
+import os
 import sys
 from datetime import date, datetime, time, timedelta, timezone
 
@@ -27,11 +28,29 @@ def seed_service_types(db: Session) -> None:
     db.commit()
 
 
-def seed_demo(db: Session, today: date | None = None) -> None:
-    if db.scalar(select(m.Vehicle.id)):
+DEMO_EMAIL = "demo@example.com"
+
+
+def demo_user(db: Session) -> m.User:
+    """The account demo data belongs to; created (as owner if it's the first) when missing."""
+    from app.auth import hash_password
+
+    user = db.scalar(select(m.User).where(m.User.email == DEMO_EMAIL))
+    if not user:
+        first = db.scalar(select(m.User.id)) is None
+        user = m.User(email=DEMO_EMAIL, name="Demo", is_owner=first,
+                      password_hash=hash_password(os.environ.get("DEMO_PASSWORD", "demo-password")))
+        db.add(user)
+        db.flush()
+    return user
+
+
+def seed_demo(db: Session, today: date | None = None, user: m.User | None = None) -> None:
+    user = user or demo_user(db)
+    if db.scalar(select(m.Vehicle.id).where(m.Vehicle.user_id == user.id)):
         return
     today = today or date.today()
-    v = m.Vehicle(nickname="Civic", make="Honda", model="Civic", year=2019)
+    v = m.Vehicle(nickname="Civic", make="Honda", model="Civic", year=2019, user_id=user.id)
     db.add(v)
     db.flush()
     # ~40 km/day over the last year
@@ -64,13 +83,13 @@ def seed_demo(db: Session, today: date | None = None) -> None:
         d = date(today.year, month, day)
         return d if d >= today else date(today.year + 1, month, day)
 
-    db.add(m.DateItem(vehicle_id=v.id, kind="registration", title="Registration renewal",
+    db.add(m.DateItem(vehicle_id=v.id, user_id=user.id, kind="registration", title="Registration renewal",
                       due_date=next_annual(6, 30)))
-    db.add(m.DateItem(vehicle_id=v.id, kind="insurance", title="Insurance renewal",
+    db.add(m.DateItem(vehicle_id=v.id, user_id=user.id, kind="insurance", title="Insurance renewal",
                       due_date=today + timedelta(days=75)))
-    db.add(m.DateItem(vehicle_id=v.id, kind="winter_install", title="Install winter tires by Dec 1",
+    db.add(m.DateItem(vehicle_id=v.id, user_id=user.id, kind="winter_install", title="Install winter tires by Dec 1",
                       due_date=next_annual(12, 1)))
-    db.add(m.DateItem(vehicle_id=v.id, kind="winter_remove", title="Winter tires can come off after Mar 15",
+    db.add(m.DateItem(vehicle_id=v.id, user_id=user.id, kind="winter_remove", title="Winter tires can come off after Mar 15",
                       due_date=next_annual(3, 15), informational=True, soon_days=14))
     summer = m.TireSet(vehicle_id=v.id, label="Summer set", season="summer", size="215/55R16",
                        brand_model="Michelin Pilot", purchase_date=today - timedelta(days=900), cost_cents=62000)

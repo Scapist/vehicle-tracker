@@ -10,7 +10,9 @@ class Base(DeclarativeBase):
     pass
 
 
-def make_engine(url: str | None = None):
+def make_engine(url: str | None = None, foreign_keys: bool = True):
+    """foreign_keys=False is only for migrations: SQLite table rebuilds (drop + rename) would otherwise
+    cascade-delete every child row."""
     if url is None:
         settings.data_dir.mkdir(parents=True, exist_ok=True)
         url = f"sqlite:///{(settings.data_dir / 'tracker.sqlite3').as_posix()}"
@@ -20,7 +22,7 @@ def make_engine(url: str | None = None):
     def _pragma(conn, _):
         cur = conn.cursor()
         cur.execute("PRAGMA journal_mode=WAL")
-        cur.execute("PRAGMA foreign_keys=ON")
+        cur.execute(f"PRAGMA foreign_keys={'ON' if foreign_keys else 'OFF'}")
         cur.close()
 
     return eng

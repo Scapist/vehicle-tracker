@@ -11,3 +11,6 @@ test-results/
 *.log
 backend/.devdata/
 .claude/
+*.sqlite3
+*.sqlite3-*
+.migdata/

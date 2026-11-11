@@ -10,10 +10,37 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class User(Base):
+    __tablename__ = "user"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(254), unique=True)  # stored lower-case; the login name
+    name: Mapped[str] = mapped_column(String(80))
+    password_hash: Mapped[str] = mapped_column(String(255))
+    is_owner: Mapped[bool] = mapped_column(Boolean, default=False)
+    # bumped on password change / sign-out-everywhere; part of every session signature
+    session_version: Mapped[int] = mapped_column(default=1)
+    telegram_chat_id: Mapped[int | None] = mapped_column(unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Invite(Base):
+    __tablename__ = "invite"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)  # sha256 of the secret in the link
+    created_by: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_by: Mapped[int | None] = mapped_column(ForeignKey("user.id", ondelete="SET NULL"))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class Vehicle(Base):
     __tablename__ = "vehicle"
+    __table_args__ = (UniqueConstraint("user_id", "nickname", name="uq_vehicle_user_id_nickname"),)
     id: Mapped[int] = mapped_column(primary_key=True)
-    nickname: Mapped[str] = mapped_column(String(60), unique=True)
+    # nullable only so pre-accounts data survives the migration; the first account claims it
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), index=True)
+    nickname: Mapped[str] = mapped_column(String(60))
     make: Mapped[str] = mapped_column(String(60))
     model: Mapped[str] = mapped_column(String(60))
     year: Mapped[int]
@@ -96,6 +123,7 @@ class DateItem(Base):
     __tablename__ = "date_item"
     id: Mapped[int] = mapped_column(primary_key=True)
     vehicle_id: Mapped[int | None] = mapped_column(ForeignKey("vehicle.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), index=True)
     kind: Mapped[str] = mapped_column(String(20))  # registration|insurance|winter_install|winter_remove|custom
     title: Mapped[str] = mapped_column(String(120))
     due_date: Mapped[date] = mapped_column(Date)
