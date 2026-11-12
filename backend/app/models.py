@@ -69,6 +69,8 @@ class ServiceType(Base):
     default_interval_months: Mapped[int | None]
     default_soon_km: Mapped[int] = mapped_column(default=1000)
     default_soon_days: Mapped[int] = mapped_column(default=30)
+    # None for the built-in types everyone shares; set for a type someone added for themselves
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), index=True)
 
 
 class ServiceRecord(Base):

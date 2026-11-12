@@ -1,7 +1,7 @@
 """Ownership checks. Anything that isn't the current user's is reported as not found, never as forbidden,
 so ids belonging to other people can't be probed."""
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app import models as m
@@ -68,6 +68,23 @@ def owned_recurring_cost(db: Session, user: m.User, cost_id: int) -> m.Recurring
     if not rc or not find_owned_vehicle(db, user, rc.vehicle_id):
         raise _missing("Payment")
     return rc
+
+
+def visible_service_types(user: m.User):
+    """The built-in service types plus the ones this user added."""
+    return or_(m.ServiceType.user_id.is_(None), m.ServiceType.user_id == user.id)
+
+
+def usable_type_ids(db: Session, user: m.User) -> set[int]:
+    return set(db.scalars(select(m.ServiceType.id).where(visible_service_types(user))))
+
+
+def owned_service_type(db: Session, user: m.User, type_id: int) -> m.ServiceType:
+    """A custom service type of this user's (the built-ins can't be changed)."""
+    t = db.get(m.ServiceType, type_id)
+    if not t or t.user_id != user.id:
+        raise _missing("Service")
+    return t
 
 
 def user_vehicle_ids(db: Session, user: m.User) -> list[int]:

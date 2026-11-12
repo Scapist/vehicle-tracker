@@ -123,6 +123,14 @@ entry as a correction.
 Winter tires: "Add winter-tire reminders" on a vehicle's *Reminders & dates* tab creates "Install by Dec 1" and
 "Can remove after Mar 15". Marking either done asks which tire set is on the car.
 
+## Services
+
+Built in: oil change, tire rotation, brake inspection, engine and cabin air filters, battery, wheel alignment,
+transmission fluid, coolant, spark plugs, brake fluid and wiper blades. For anything else, type its name in
+"What was done?" (or in a reminder's Service field) and pick **+ Add "…"**. Your own services are only visible
+to you, work for reminders, and get their own line in Reports. Rename or delete them in Settings → *Your
+services*; one that's already in your history or a reminder can only be renamed.
+
 ## Spending and recurring payments
 
 **Reports** shows what you spent in a period (this month, last month, this year, last year, the last 12 months

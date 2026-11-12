@@ -7,10 +7,13 @@ import { useMediaQuery } from "@mantine/hooks";
 import { IconDownload } from "@tabler/icons-react";
 import dayjs from "dayjs";
 import { useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { spendingQuery, useReport, useSpending, useVehicles } from "../api/hooks";
-import type { SpendingEntry } from "../api/types";
+import { api } from "../api/client";
+import type { Service, SpendingEntry } from "../api/types";
+import { ServiceDrawer } from "../components/ServicesList";
+import { notifyError } from "../components/status";
 import { day, km, money } from "../lib/format";
 
 const COLORS = ["blue.6", "teal.6", "orange.6", "grape.6", "red.6", "cyan.6", "lime.6", "pink.6", "yellow.6", "gray.6"];
@@ -206,9 +209,23 @@ const PAGE = 25;
 
 function Entries({ entries, names }: { entries: SpendingEntry[]; names: Record<number, string> }) {
   const [shown, setShown] = useState(PAGE);
+  const [service, setService] = useState<Service | null>(null);
+  const navigate = useNavigate();
   const list = entries.slice(0, shown);
+  // each entry opens where it came from: the service's details, the vehicle's payments, or the tires page
+  async function open(e: SpendingEntry) {
+    if (e.source === "recurring") return navigate(`/vehicles/${e.vehicle_id}?tab=payments`);
+    if (e.source === "tire") return navigate("/tires");
+    try {
+      setService(await api<Service>(`/services/${e.ref_id}`));
+    } catch (err) { notifyError(err); }
+  }
+  const clickable = { cursor: "pointer" } as const;
+  const stop = (ev: { stopPropagation: () => void }) => ev.stopPropagation(); // the vehicle link goes to the vehicle
   const scheduled = (e: SpendingEntry) => e.scheduled && <Badge size="xs" variant="light" color="gray">scheduled</Badge>;
-  const vehicle = (e: SpendingEntry) => <Anchor component={Link} to={`/vehicles/${e.vehicle_id}`} size="sm">{names[e.vehicle_id] ?? "—"}</Anchor>;
+  const vehicle = (e: SpendingEntry) => (
+    <Anchor component={Link} to={`/vehicles/${e.vehicle_id}`} size="sm" onClick={stop}>{names[e.vehicle_id] ?? "—"}</Anchor>
+  );
   return (
     <>
       <Title order={4}>Entries</Title>
@@ -222,7 +239,8 @@ function Entries({ entries, names }: { entries: SpendingEntry[]; names: Record<n
           </Table.Thead>
           <Table.Tbody>
             {list.map((e, i) => (
-              <Table.Tr key={`${e.source}-${e.ref_id}-${e.date}-${e.category}-${i}`} c={e.scheduled ? "dimmed" : undefined}>
+              <Table.Tr key={`${e.source}-${e.ref_id}-${e.date}-${e.category}-${i}`} c={e.scheduled ? "dimmed" : undefined}
+                style={clickable} onClick={() => open(e)}>
                 <Table.Td>{day(e.date)}</Table.Td>
                 <Table.Td>{vehicle(e)}</Table.Td>
                 <Table.Td>{e.category}</Table.Td>
@@ -235,7 +253,9 @@ function Entries({ entries, names }: { entries: SpendingEntry[]; names: Record<n
       </Table.ScrollContainer>
       <Stack gap="xs" hiddenFrom="sm">
         {list.map((e, i) => (
-          <Card key={`${e.source}-${e.ref_id}-${e.date}-${e.category}-${i}`} withBorder padding="sm" c={e.scheduled ? "dimmed" : undefined}>
+          <Card key={`${e.source}-${e.ref_id}-${e.date}-${e.category}-${i}`} withBorder padding="sm" c={e.scheduled ? "dimmed" : undefined}
+            role="button" tabIndex={0} onClick={() => open(e)} onKeyDown={(k) => k.key === "Enter" && open(e)}
+            style={clickable}>
             <Group justify="space-between" wrap="nowrap">
               <Text fw={600} size="sm">{e.label}</Text>
               <Text fw={700} size="sm">{money(e.cents)}</Text>
@@ -246,6 +266,7 @@ function Entries({ entries, names }: { entries: SpendingEntry[]; names: Record<n
           </Card>
         ))}
       </Stack>
+      <ServiceDrawer service={service} onClose={() => setService(null)} />
       {entries.length > shown && (
         <Button variant="default" onClick={() => setShown((n) => n + PAGE)}>Show more ({entries.length - shown} left)</Button>
       )}

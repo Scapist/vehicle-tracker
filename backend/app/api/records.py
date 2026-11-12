@@ -1,14 +1,17 @@
 import json
+import uuid
 from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
-from sqlalchemy import select
+from fastapi.responses import FileResponse, Response
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import models as m
 from app import schemas as s
-from app.api.deps import owned_attachment, owned_service, owned_vehicle
+from app.api.deps import (
+    owned_attachment, owned_service, owned_service_type, owned_vehicle, usable_type_ids, visible_service_types,
+)
 from app.auth import current_user
 from app.clock import today_local
 from app.db import get_db
@@ -19,9 +22,68 @@ MAX_FILES = 10
 MAX_ATTACHMENTS = 30
 
 
+def _type_out(t: m.ServiceType) -> s.ServiceTypeOut:
+    out = s.ServiceTypeOut.model_validate(t)
+    out.custom = t.user_id is not None
+    return out
+
+
+def _same_name(db: Session, user: m.User, name: str, exclude: int | None = None) -> m.ServiceType | None:
+    q = select(m.ServiceType).where(visible_service_types(user), func.lower(m.ServiceType.name) == name.lower())
+    if exclude is not None:
+        q = q.where(m.ServiceType.id != exclude)
+    return db.scalars(q).first()
+
+
 @router.get("/service-types", response_model=list[s.ServiceTypeOut])
 def service_types(user: m.User = Depends(current_user), db: Session = Depends(get_db)):
-    return list(db.scalars(select(m.ServiceType).order_by(m.ServiceType.name)))
+    """The built-in types and this user's own, alphabetically."""
+    q = select(m.ServiceType).where(visible_service_types(user)).order_by(func.lower(m.ServiceType.name))
+    return [_type_out(t) for t in db.scalars(q)]
+
+
+@router.post("/service-types", response_model=s.ServiceTypeOut, status_code=201)
+def create_service_type(body: s.ServiceTypeIn, response: Response, user: m.User = Depends(current_user),
+                        db: Session = Depends(get_db)):
+    """Add a service of your own. If one with that name already exists for you, you get that one back."""
+    existing = _same_name(db, user, body.name)
+    if existing:
+        response.status_code = 200
+        return _type_out(existing)
+    t = m.ServiceType(key=f"custom-{uuid.uuid4().hex[:12]}", name=body.name, user_id=user.id,
+                      default_interval_km=None, default_interval_months=None, default_soon_km=1000,
+                      default_soon_days=30)
+    db.add(t)
+    db.commit()
+    return _type_out(t)
+
+
+@router.patch("/service-types/{type_id}", response_model=s.ServiceTypeOut)
+def rename_service_type(type_id: int, body: s.ServiceTypeIn, user: m.User = Depends(current_user),
+                        db: Session = Depends(get_db)):
+    t = owned_service_type(db, user, type_id)
+    if _same_name(db, user, body.name, exclude=t.id):
+        raise HTTPException(409, f"You already have a service called “{body.name}”")
+    t.name = body.name
+    db.commit()
+    return _type_out(t)
+
+
+@router.delete("/service-types/{type_id}", status_code=204)
+def delete_service_type(type_id: int, user: m.User = Depends(current_user), db: Session = Depends(get_db)):
+    t = owned_service_type(db, user, type_id)
+    used = db.scalar(select(func.count()).select_from(m.ServiceRecordItem)
+                     .where(m.ServiceRecordItem.service_type_id == t.id))
+    rules = db.scalar(select(func.count()).select_from(m.ReminderRule).where(m.ReminderRule.service_type_id == t.id))
+    if used or rules:
+        raise HTTPException(409, "It's used in your service history or a reminder, so it can only be renamed")
+    db.delete(t)
+    db.commit()
+
+
+@router.get("/services/{service_id}", response_model=s.ServiceOut)
+def get_service(service_id: int, user: m.User = Depends(current_user), db: Session = Depends(get_db)):
+    return views.service_out(db, owned_service(db, user, service_id))
 
 
 @router.get("/vehicles/{vehicle_id}/services", response_model=list[s.ServiceOut])
@@ -57,7 +119,7 @@ async def create_service(
         raise HTTPException(422, "Item costs can't be negative")
     if sum(costs.values()) > cost_cents:
         raise HTTPException(422, "Item costs add up to more than the total")
-    known = set(db.scalars(select(m.ServiceType.id)))
+    known = usable_type_ids(db, user)
     if any(t not in known for t in type_ids):
         raise HTTPException(422, "Unknown service type")
     if len(files) > MAX_FILES:

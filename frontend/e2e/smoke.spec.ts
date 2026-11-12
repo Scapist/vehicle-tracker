@@ -151,9 +151,38 @@ test("recurring payment counts toward spending and filters by category", async (
     await page.getByRole("option", { name: "Financing" }).click();
     await page.keyboard.press("Escape");
     await expect(page).toHaveURL(/category=Financing/);
+
+    // a payment entry leads to the vehicle's Payments tab
+    await page.getByText("Lease", { exact: true }).filter({ visible: true }).first().click();
+    await expect(page).toHaveURL(new RegExp(`/vehicles/${v.id}[?]tab=payments$`));
+    await expect(page.getByRole("tab", { name: "Payments", selected: true })).toBeVisible();
   } finally {
     await request.patch(`/api/v1/vehicles/${v.id}`, { data: { archived: true } });
   }
+});
+
+test("a service that isn't in the list can be added while logging", async ({ page }, info) => {
+  const name = `Rustproof ${info.project.name} ${Date.now()}`;
+  await page.goto("/vehicles/1");
+  await page.getByRole("button", { name: "Quick log" }).click();
+  await page.getByRole("tab", { name: "Service", exact: true }).click();
+  const picker = page.getByRole("textbox", { name: "What was done?" });
+  await picker.fill(name);
+  await page.getByRole("option", { name: `+ Add “${name}”` }).click();
+  await expect(page.getByText(name, { exact: true }).filter({ visible: true }).first()).toBeVisible();
+  await page.keyboard.press("Escape"); // closes the dropdown only
+  await page.getByLabel("Total cost").fill("90");
+  await page.getByRole("button", { name: "Save service" }).click();
+  await expect(page.getByText("Service logged for Civic")).toBeVisible();
+  await page.goto("/settings");
+  await expect(page.getByText(name, { exact: true })).toBeVisible();
+});
+
+test("a service entry in Reports opens its details", async ({ page }) => {
+  await page.goto("/reports?period=12-months");
+  await page.getByText("Garage Pro").filter({ visible: true }).first().click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByRole("dialog").getByText("Garage Pro").first()).toBeVisible();
 });
 
 for (const scheme of ["light", "dark"] as const) {

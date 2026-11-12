@@ -85,6 +85,9 @@ Decisions worth noticing:
   several service types, each with an optional cost.
 - **Times are stored in UTC and shown in local time** (`app/clock.py`). Mixed time zones in storage cause
   "off by one day" bugs around midnight.
+- **Service types are shared or personal.** `ServiceType.user_id` is empty for the built-ins and set for one a
+  person added. Every place that accepts a service type checks it against `usable_type_ids` (`api/deps.py`), so
+  nobody can log a service with someone else's custom type.
 - **Recurring payments store a rule, not rows.** A `RecurringCost` says "$142 every month from Jan 5"; the
   individual payments are calculated when needed (`domain/recurring.py`). A price change ends one row and starts
   another, so past payments keep their old price without a separate history table.

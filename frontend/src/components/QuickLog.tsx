@@ -1,5 +1,5 @@
 import {
-  Alert, Button, Checkbox, FileButton, Group, Modal, MultiSelect, NumberInput, Select, Stack, Tabs, Text,
+  Alert, Button, Checkbox, FileButton, Group, Modal, NumberInput, Select, Stack, Tabs, Text,
   Textarea, TextInput,
 } from "@mantine/core";
 import { DateInput } from "@mantine/dates";
@@ -9,9 +9,10 @@ import { IconCamera, IconGauge, IconPaperclip, IconReceipt, IconTool } from "@ta
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { api, ApiError } from "../api/client";
-import { useInvalidate, useServices, useServiceTypes, useVehicles } from "../api/hooks";
+import { useInvalidate, useServices, useVehicles } from "../api/hooks";
 import type { Odometer, Service, Vehicle } from "../api/types";
 import { isoDate, km, toCents } from "../lib/format";
+import { ServiceTypeMultiPicker } from "./ServiceTypePicker";
 import { notifyError, notifyUndo } from "./status";
 
 type Tab = "mileage" | "service" | "receipt";
@@ -141,7 +142,6 @@ function FilePicker({ files, setFiles }: { files: File[]; setFiles: (f: File[]) 
 
 export function ServiceForm({ vehicles, initial, onDone }: FormProps) {
   const { vehicle, select } = useVehiclePick(vehicles, initial);
-  const types = useServiceTypes();
   const [date, setDate] = useState<Date | null>(new Date());
   const [odo, setOdo] = useState<number | string>(vehicle.current_km ?? "");
   const [typeIds, setTypeIds] = useState<string[]>([]);
@@ -184,9 +184,7 @@ export function ServiceForm({ vehicles, initial, onDone }: FormProps) {
   return (
     <Stack>
       {select}
-      <MultiSelect label="What was done?" placeholder="Pick one or more"
-        data={(types.data ?? []).map((t) => ({ value: String(t.id), label: t.name }))}
-        value={typeIds} onChange={setTypeIds} searchable />
+      <ServiceTypeMultiPicker label="What was done?" value={typeIds} onChange={setTypeIds} />
       <Group grow align="flex-start">
         <DateInput label="Date" value={date} onChange={setDate} maxDate={new Date()} valueFormat="MMM D, YYYY" />
         <NumberInput label="Odometer (km)" value={odo} onChange={setOdo} thousandSeparator="," min={0} inputMode="numeric" />

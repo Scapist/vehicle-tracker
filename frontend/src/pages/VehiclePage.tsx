@@ -7,7 +7,7 @@ import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { IconPlus, IconPrinter } from "@tabler/icons-react";
 import dayjs from "dayjs";
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import { api } from "../api/client";
 import {
@@ -18,6 +18,7 @@ import { ItemCard } from "../components/ItemCard";
 import { PaymentsTab } from "../components/PaymentsTab";
 import { useQuickLog } from "../components/QuickLog";
 import { ServicesList } from "../components/ServicesList";
+import { ServiceTypeSelect } from "../components/ServiceTypePicker";
 import { notifyError, notifyUndo } from "../components/status";
 import { day, isoDate, km, money } from "../lib/format";
 
@@ -26,6 +27,8 @@ export default function VehiclePage() {
   const dash = useDashboard(id);
   const quick = useQuickLog();
   const services = useServices(id);
+  const [params, setParams] = useSearchParams(); // ?tab=payments etc., so other pages can link to a tab
+  const tab = params.get("tab") ?? "overview";
   if (dash.isLoading) return <Loader />;
   if (dash.error || !dash.data) return <Text c="red">Couldn't load that vehicle.</Text>;
   const { vehicle: v, items } = dash.data;
@@ -48,7 +51,8 @@ export default function VehiclePage() {
         </Group>
       </Group>
 
-      <Tabs defaultValue="overview" keepMounted={false}>
+      <Tabs value={tab} onChange={(t) => setParams(t && t !== "overview" ? { tab: t } : {}, { replace: true })}
+        keepMounted={false}>
         <Tabs.List style={{ flexWrap: "nowrap", overflowX: "auto", overflowY: "hidden" }}>
           <Tabs.Tab value="overview">Overview</Tabs.Tab>
           <Tabs.Tab value="services">Services</Tabs.Tab>
@@ -225,7 +229,7 @@ function RuleModal({ vehicleId, rule, types, existing, onClose }: {
   vehicleId: number; rule: Rule | null; types: ServiceType[]; existing: Rule[]; onClose: () => void;
 }) {
   const mobile = useMediaQuery("(max-width: 48em)");
-  const available = types.filter((t) => !existing.some((r) => r.service_type_id === t.id) || t.id === rule?.service_type_id);
+  const available = (t: ServiceType) => !existing.some((r) => r.service_type_id === t.id) || t.id === rule?.service_type_id;
   const [typeId, setTypeId] = useState<string | null>(rule ? String(rule.service_type_id) : null);
   const [ikm, setIkm] = useState<number | string>(rule?.interval_km ?? "");
   const [imo, setImo] = useState<number | string>(rule?.interval_months ?? "");
@@ -261,8 +265,7 @@ function RuleModal({ vehicleId, rule, types, existing, onClose }: {
   return (
     <Modal opened onClose={onClose} title={rule ? "Edit reminder" : "Add reminder"} fullScreen={!!mobile}>
       <Stack>
-        {!rule && <Select label="Service" data={available.map((t) => ({ value: String(t.id), label: t.name }))}
-          value={typeId} onChange={pickType} />}
+        {!rule && <ServiceTypeSelect label="Service" include={available} value={typeId} onChange={pickType} />}
         <Group grow align="flex-start">
           <NumberInput label="Every (km)" value={ikm} onChange={setIkm} thousandSeparator="," min={1} />
           <NumberInput label="Every (months)" value={imo} onChange={setImo} min={1} />

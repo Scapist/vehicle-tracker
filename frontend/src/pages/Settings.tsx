@@ -9,7 +9,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { api, ApiError } from "../api/client";
-import { useApiMutation, useVehicles } from "../api/hooks";
+import { useApiMutation, useServiceTypes, useVehicles } from "../api/hooks";
 import type { components } from "../api/schema";
 import { setSession, useUser } from "../components/AuthGate";
 import { notifyError, notifyUndo } from "../components/status";
@@ -55,6 +55,7 @@ export default function Settings() {
           ))}
         </Stack>
       </Card>
+      <ServicesCard />
       <TelegramCard />
       {user.is_owner && <InvitesCard />}
       <AddVehicleModal opened={adding} onClose={add.close} />
@@ -262,6 +263,70 @@ function InvitesCard() {
           </Group>
         ))}
       </Stack>
+    </Card>
+  );
+}
+
+function ServicesCard() {
+  const types = useServiceTypes();
+  const qc = useQueryClient();
+  const [name, setName] = useState("");
+  const [renaming, setRenaming] = useState<{ id: number; name: string } | null>(null);
+  const custom = (types.data ?? []).filter((t) => t.custom);
+  const refresh = () => qc.invalidateQueries();
+  async function add() {
+    try {
+      await api("/service-types", { method: "POST", json: { name } });
+      setName("");
+      await refresh();
+    } catch (e) { notifyError(e); }
+  }
+  async function rename() {
+    if (!renaming) return;
+    try {
+      await api(`/service-types/${renaming.id}`, { method: "PATCH", json: { name: renaming.name } });
+      setRenaming(null);
+      await refresh();
+    } catch (e) { notifyError(e); }
+  }
+  async function remove(id: number) {
+    try {
+      await api(`/service-types/${id}`, { method: "DELETE" });
+      await refresh();
+    } catch (e) { notifyError(e); }
+  }
+  return (
+    <Card withBorder>
+      <Stack gap="sm">
+        <Text fw={600}>Your services</Text>
+        <Text size="sm" c="dimmed">
+          Services that aren't in the built-in list. You can also add one while logging: type its name in
+          “What was done?”. Only you see them.
+        </Text>
+        {custom.length === 0 && <Text size="sm" c="dimmed">None yet.</Text>}
+        {custom.map((t) => (
+          <Group key={t.id} justify="space-between" wrap="nowrap">
+            <Text>{t.name}</Text>
+            <Group gap="xs" wrap="nowrap">
+              <Button size="compact-sm" variant="default" onClick={() => setRenaming({ id: t.id, name: t.name })}>Rename</Button>
+              <Button size="compact-sm" variant="subtle" color="red" onClick={() => remove(t.id)}>Delete</Button>
+            </Group>
+          </Group>
+        ))}
+        <Group gap="xs" wrap="nowrap">
+          <TextInput placeholder="e.g. Wheel alignment" aria-label="New service" style={{ flex: 1 }} value={name}
+            onChange={(e) => setName(e.currentTarget.value)} onKeyDown={(e) => e.key === "Enter" && name.trim() && add()} />
+          <Button leftSection={<IconPlus size={14} />} onClick={add} disabled={!name.trim()}>Add</Button>
+        </Group>
+      </Stack>
+      <Modal opened={!!renaming} onClose={() => setRenaming(null)} title="Rename service">
+        <Stack>
+          <TextInput label="Name" data-autofocus value={renaming?.name ?? ""}
+            onChange={(e) => { const v = e.currentTarget.value; setRenaming((r) => (r ? { ...r, name: v } : r)); }} />
+          <Text size="xs" c="dimmed">Past services and reports use the new name too.</Text>
+          <Button onClick={rename} disabled={!renaming?.name.trim()}>Save</Button>
+        </Stack>
+      </Modal>
     </Card>
   );
 }

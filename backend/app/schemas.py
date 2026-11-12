@@ -66,6 +66,19 @@ class ServiceTypeOut(ORM):
     default_interval_months: int | None
     default_soon_km: int
     default_soon_days: int
+    custom: bool = False
+
+
+class ServiceTypeIn(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v: str) -> str:
+        v = " ".join(v.split())
+        if not v:
+            raise ValueError("must not be empty")
+        return v
 
 
 class AttachmentOut(ORM):

@@ -16,6 +16,12 @@ SERVICE_TYPES = [
     ("engine_air_filter", "Engine air filter", 30000, 24, 2000, 45),
     ("cabin_filter", "Cabin filter", 20000, 12, 1500, 30),
     ("battery", "Battery", None, 48, 0, 60),
+    ("wheel_alignment", "Wheel alignment", None, 24, 0, 30),
+    ("transmission_fluid", "Transmission fluid", 60000, 48, 3000, 60),
+    ("coolant", "Coolant", 100000, 60, 5000, 60),
+    ("spark_plugs", "Spark plugs", 100000, None, 5000, 60),
+    ("brake_fluid", "Brake fluid", None, 36, 0, 30),
+    ("wiper_blades", "Wiper blades", None, 12, 0, 30),
 ]
 
 

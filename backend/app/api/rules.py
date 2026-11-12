@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app import models as m
 from app import schemas as s
-from app.api.deps import owned_date_item, owned_rule, owned_tire_set, owned_vehicle
+from app.api.deps import owned_date_item, owned_rule, owned_tire_set, owned_vehicle, usable_type_ids
 from app.auth import current_user
 from app.clock import now_utc, today_local
 from app.db import get_db
@@ -34,7 +34,7 @@ def create_rule(vehicle_id: int, body: s.RuleIn, user: m.User = Depends(current_
     owned_vehicle(db, user, vehicle_id)
     if body.interval_km is None and body.interval_months is None:
         raise HTTPException(422, "Set a km interval, a months interval, or both")
-    if not db.get(m.ServiceType, body.service_type_id):
+    if body.service_type_id not in usable_type_ids(db, user):
         raise HTTPException(422, "Unknown service type")
     rule = m.ReminderRule(vehicle_id=vehicle_id, **body.model_dump())
     db.add(rule)

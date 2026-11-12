@@ -307,11 +307,54 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Service Types */
+        /**
+         * Service Types
+         * @description The built-in types and this user's own, alphabetically.
+         */
         get: operations["service_types_api_v1_service_types_get"];
         put?: never;
-        post?: never;
+        /**
+         * Create Service Type
+         * @description Add a service of your own. If one with that name already exists for you, you get that one back.
+         */
+        post: operations["create_service_type_api_v1_service_types_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/service-types/{type_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Service Type */
+        delete: operations["delete_service_type_api_v1_service_types__type_id__delete"];
+        options?: never;
+        head?: never;
+        /** Rename Service Type */
+        patch: operations["rename_service_type_api_v1_service_types__type_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/services/{service_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Service */
+        get: operations["get_service_api_v1_services__service_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Service */
+        delete: operations["delete_service_api_v1_services__service_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -346,23 +389,6 @@ export interface paths {
         /** Create Service */
         post: operations["create_service_api_v1_services_post"];
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/services/{service_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete Service */
-        delete: operations["delete_service_api_v1_services__service_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1241,6 +1267,11 @@ export interface components {
              */
             type_names: string[];
         };
+        /** ServiceTypeIn */
+        ServiceTypeIn: {
+            /** Name */
+            name: string;
+        };
         /** ServiceTypeOut */
         ServiceTypeOut: {
             /** Id */
@@ -1257,6 +1288,11 @@ export interface components {
             default_soon_km: number;
             /** Default Soon Days */
             default_soon_days: number;
+            /**
+             * Custom
+             * @default false
+             */
+            custom: boolean;
         };
         /** SetupIn */
         SetupIn: {
@@ -2173,6 +2209,163 @@ export interface operations {
             };
         };
     };
+    create_service_type_api_v1_service_types_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServiceTypeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceTypeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_service_type_api_v1_service_types__type_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                type_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_service_type_api_v1_service_types__type_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                type_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServiceTypeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceTypeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_service_api_v1_services__service_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                service_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_service_api_v1_services__service_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                service_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_services_api_v1_vehicles__vehicle_id__services_get: {
         parameters: {
             query?: never;
@@ -2225,35 +2418,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ServiceOut"];
                 };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_service_api_v1_services__service_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                service_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Validation Error */
             422: {
