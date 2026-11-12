@@ -1572,6 +1572,11 @@ export interface components {
             vin: string | null;
             /** Archived */
             archived: boolean;
+            /**
+             * Nudge Days
+             * @default 14
+             */
+            nudge_days: number;
             /** Current Km */
             current_km?: number | null;
             /**
@@ -1594,6 +1599,8 @@ export interface components {
             vin?: string | null;
             /** Archived */
             archived?: boolean | null;
+            /** Nudge Days */
+            nudge_days?: number | null;
         };
         /** YearRow */
         YearRow: {

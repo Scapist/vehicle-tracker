@@ -46,6 +46,8 @@ class Vehicle(Base):
     year: Mapped[int]
     vin: Mapped[str | None] = mapped_column(String(32))
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    # ask for the odometer over Telegram after this many days without a reading (0 = never)
+    nudge_days: Mapped[int] = mapped_column(default=14, server_default="14")
 
 
 class OdometerReading(Base):

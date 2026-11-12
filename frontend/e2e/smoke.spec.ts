@@ -185,6 +185,23 @@ test("a service entry in Reports opens its details", async ({ page }) => {
   await expect(page.getByRole("dialog").getByText("Garage Pro").first()).toBeVisible();
 });
 
+test("mileage nudge can be set per vehicle", async ({ page }) => {
+  const request = page.request;
+  const v = await (await request.post("/api/v1/vehicles", {
+    data: { nickname: `Nudge${Date.now()}`, make: "Kia", model: "Soul", year: 2018 },
+  })).json();
+  try {
+    await page.goto(`/vehicles/${v.id}?tab=odometer`);
+    const select = page.getByRole("textbox", { name: "Ask me for the km" });
+    await expect(select).toHaveValue("After 2 weeks");
+    await select.click();
+    await page.getByRole("option", { name: "Never" }).click();
+    await expect.poll(async () => (await (await request.get(`/api/v1/vehicles/${v.id}`)).json()).nudge_days).toBe(0);
+  } finally {
+    await request.patch(`/api/v1/vehicles/${v.id}`, { data: { archived: true } });
+  }
+});
+
 for (const scheme of ["light", "dark"] as const) {
   test(`screenshots (${scheme})`, async ({ page }, info) => {
     await page.emulateMedia({ colorScheme: scheme });
@@ -209,6 +226,7 @@ for (const scheme of ["light", "dark"] as const) {
     await page.getByRole("tab", { name: "Services", exact: true }).click(); await snap("vehicle-services", 2);
     await page.getByRole("tab", { name: "Reminders", exact: true }).click(); await snap("vehicle-reminders", 3);
     await page.getByRole("tab", { name: "Payments", exact: true }).click(); await snap("vehicle-payments", 1);
+    await page.getByRole("tab", { name: "Odometer", exact: true }).click(); await snap("vehicle-odometer", 1);
     await go("/tires"); await snap("tires", 2);
     await go("/reports"); await snap("reports", 2);
     await go("/settings"); await snap("settings", 1);

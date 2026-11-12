@@ -107,6 +107,11 @@ The bot uses long polling, so no public URL is needed. What it understands:
 | A photo or PDF | Attached to the latest service from the last 7 days, or saved as a receipt-only entry. |
 | `/due`, `/vehicles`, `/help` | Status commands. |
 
+**Mileage nudge.** Km-based reminders are only as accurate as the latest reading, so if a vehicle with a km
+reminder has had no reading for 2 weeks, the bot asks for the odometer at 18:00 (and again every 2 weeks while
+it stays quiet). Just reply with the number. Change the interval or turn it off per vehicle on its *Odometer*
+tab, or tap **Stop asking** on the message.
+
 Alerts arrive with **Done today** (logs the service at the current km) and **Snooze 7 d** buttons.
 An alert fires once when an item moves into *due soon* or *overdue*; logging a service starts a new cycle,
 and a snoozed item that is still due re-alerts once after the snooze ends. With `NOTIFIER=log` (the default)

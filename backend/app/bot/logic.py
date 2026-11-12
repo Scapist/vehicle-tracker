@@ -136,6 +136,14 @@ def handle_callback(db: Session, user: m.User, data: str) -> Reply:
             from app.api.rules import snooze_subject
             snooze_subject(db, user, f"{parts[1]}:{parts[2]}", int(parts[3]))  # 404s if not this user's
             return Reply(f"Snoozed for {parts[3]} days.")
+        if kind == "nudge" and parts[1] == "off":
+            v = _vehicle(db, user, int(parts[2]))
+            if not v:
+                return Reply("Couldn't find that vehicle.")
+            v.nudge_days = 0
+            db.commit()
+            return Reply(f"Okay, I won't ask about {v.nickname}'s odometer any more. "
+                         "You can turn it back on in the app (vehicle → Odometer).")
         if kind == "rmove":
             rec = db.get(m.ServiceRecord, int(parts[1]))
             v = _vehicle(db, user, int(parts[2]))

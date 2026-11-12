@@ -37,10 +37,10 @@ def test_upgrade_keeps_every_row_and_backs_up_first(tmp_path, monkeypatch):
     with sqlite3.connect(db) as c:
         after = {t: c.execute(f"SELECT count(*) FROM {t}").fetchone()[0] for t in COUNTED}
         assert c.execute("PRAGMA foreign_key_check").fetchall() == []
-        assert c.execute("SELECT version_num FROM alembic_version").fetchone()[0] == "0004"
+        assert c.execute("SELECT version_num FROM alembic_version").fetchone()[0] == "0005"
         assert c.execute("SELECT user_id FROM vehicle").fetchone() == (None,)  # claimed at owner setup
     assert after == before and before["odometer_reading"] == 3
-    backups = list((tmp_path / "backups").glob("tracker-before-0004-*.sqlite3"))
+    backups = list((tmp_path / "backups").glob("tracker-before-0005-*.sqlite3"))
     assert len(backups) == 1
     with sqlite3.connect(backups[0]) as c:
         assert c.execute("SELECT count(*) FROM odometer_reading").fetchone()[0] == 3

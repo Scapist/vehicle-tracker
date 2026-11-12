@@ -23,6 +23,7 @@ class VehiclePatch(BaseModel):
     year: int | None = Field(default=None, ge=1900, le=2100)
     vin: str | None = Field(default=None, max_length=32)
     archived: bool | None = None
+    nudge_days: int | None = Field(default=None, ge=0, le=365)
 
 
 class VehicleOut(ORM):
@@ -33,6 +34,7 @@ class VehicleOut(ORM):
     year: int
     vin: str | None
     archived: bool
+    nudge_days: int = 14
     current_km: int | None = None
     worst_status: str = "ok"
 

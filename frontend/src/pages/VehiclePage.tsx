@@ -13,7 +13,8 @@ import { api } from "../api/client";
 import {
   useApiMutation, useDashboard, useDateItems, useOdometer, useRules, useServices, useServiceTypes,
 } from "../api/hooks";
-import type { Rule, ServiceType } from "../api/types";
+import type { Rule, ServiceType, Vehicle } from "../api/types";
+import { useUser } from "../components/AuthGate";
 import { ItemCard } from "../components/ItemCard";
 import { PaymentsTab } from "../components/PaymentsTab";
 import { useQuickLog } from "../components/QuickLog";
@@ -99,7 +100,7 @@ export default function VehiclePage() {
           </Stack>
         </Tabs.Panel>
 
-        <Tabs.Panel value="odometer" pt="md"><OdometerTab id={id} /></Tabs.Panel>
+        <Tabs.Panel value="odometer" pt="md"><OdometerTab id={id} vehicle={v} /></Tabs.Panel>
         <Tabs.Panel value="reminders" pt="md"><RemindersTab id={id} /></Tabs.Panel>
         <Tabs.Panel value="payments" pt="md"><PaymentsTab vehicleId={id} /></Tabs.Panel>
       </Tabs>
@@ -107,30 +108,68 @@ export default function VehiclePage() {
   );
 }
 
-function OdometerTab({ id }: { id: number }) {
-  const odo = useOdometer(id);
-  if (!odo.data?.length) return <Text c="dimmed">No readings yet. Use Update km to add the first one.</Text>;
+const NUDGE = [
+  { value: "7", label: "After a week" }, { value: "14", label: "After 2 weeks" },
+  { value: "30", label: "After a month" }, { value: "0", label: "Never" },
+];
+
+function NudgeSetting({ vehicle }: { vehicle: Vehicle }) {
+  const user = useUser();
+  const save = useApiMutation((days: number) => api(`/vehicles/${vehicle.id}`, { method: "PATCH", json: { nudge_days: days } }));
+  const value = String(vehicle.nudge_days);
+  const data = NUDGE.some((n) => n.value === value) ? NUDGE : [...NUDGE, { value, label: `After ${value} days` }];
   return (
-    <Table.ScrollContainer minWidth={0}>
-      <Table>
-        <Table.Thead>
-          <Table.Tr><Table.Th>Date</Table.Th><Table.Th ta="right">Odometer</Table.Th><Table.Th>Source</Table.Th></Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {odo.data.map((r) => (
-            <Table.Tr key={r.id} c={r.invalidated ? "dimmed" : undefined}>
-              <Table.Td>{day(r.recorded_at)}</Table.Td>
-              <Table.Td ta="right" td={r.invalidated ? "line-through" : undefined}>{km(r.km)}</Table.Td>
-              <Table.Td>
-                {r.source}
-                {r.is_correction && <Badge ml="xs" color="orange" variant="light">correction</Badge>}
-                {r.invalidated && <Badge ml="xs" color="gray" variant="light">replaced</Badge>}
-              </Table.Td>
-            </Table.Tr>
-          ))}
-        </Table.Tbody>
-      </Table>
-    </Table.ScrollContainer>
+    <Card withBorder padding="sm">
+      <Group justify="space-between" align="flex-end" wrap="wrap" gap="xs">
+        <div style={{ flex: "1 1 240px" }}>
+          <Text fw={600} size="sm">Ask me for the km on Telegram</Text>
+          <Text size="xs" c="dimmed">
+            {user.telegram_linked
+              ? "When there's been no new reading for this long. Km reminders are only as accurate as the latest reading."
+              : "Connect Telegram in Settings first: that's where the question is sent."}
+          </Text>
+        </div>
+        <Select aria-label="Ask me for the km" w={160} allowDeselect={false} data={data} value={value}
+          onChange={(v) => v && save.mutate(Number(v), { onError: notifyError })} />
+      </Group>
+    </Card>
+  );
+}
+
+function OdometerTab({ id, vehicle }: { id: number; vehicle: Vehicle }) {
+  const odo = useOdometer(id);
+  if (!odo.data?.length) {
+    return (
+      <Stack>
+        <NudgeSetting vehicle={vehicle} />
+        <Text c="dimmed">No readings yet. Use Update km to add the first one.</Text>
+      </Stack>
+    );
+  }
+  return (
+    <Stack>
+      <NudgeSetting vehicle={vehicle} />
+      <Table.ScrollContainer minWidth={0}>
+        <Table>
+          <Table.Thead>
+            <Table.Tr><Table.Th>Date</Table.Th><Table.Th ta="right">Odometer</Table.Th><Table.Th>Source</Table.Th></Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {odo.data.map((r) => (
+              <Table.Tr key={r.id} c={r.invalidated ? "dimmed" : undefined}>
+                <Table.Td>{day(r.recorded_at)}</Table.Td>
+                <Table.Td ta="right" td={r.invalidated ? "line-through" : undefined}>{km(r.km)}</Table.Td>
+                <Table.Td>
+                  {r.source}
+                  {r.is_correction && <Badge ml="xs" color="orange" variant="light">correction</Badge>}
+                  {r.invalidated && <Badge ml="xs" color="gray" variant="light">replaced</Badge>}
+                </Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      </Table.ScrollContainer>
+    </Stack>
   );
 }
 
