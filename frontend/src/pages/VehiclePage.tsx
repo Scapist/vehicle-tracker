@@ -15,6 +15,7 @@ import {
 } from "../api/hooks";
 import type { Rule, ServiceType } from "../api/types";
 import { ItemCard } from "../components/ItemCard";
+import { PaymentsTab } from "../components/PaymentsTab";
 import { useQuickLog } from "../components/QuickLog";
 import { ServicesList } from "../components/ServicesList";
 import { notifyError, notifyUndo } from "../components/status";
@@ -53,6 +54,7 @@ export default function VehiclePage() {
           <Tabs.Tab value="services">Services</Tabs.Tab>
           <Tabs.Tab value="odometer">Odometer</Tabs.Tab>
           <Tabs.Tab value="reminders">Reminders</Tabs.Tab>
+          <Tabs.Tab value="payments">Payments</Tabs.Tab>
         </Tabs.List>
 
         <Tabs.Panel value="overview" pt="md">
@@ -95,6 +97,7 @@ export default function VehiclePage() {
 
         <Tabs.Panel value="odometer" pt="md"><OdometerTab id={id} /></Tabs.Panel>
         <Tabs.Panel value="reminders" pt="md"><RemindersTab id={id} /></Tabs.Panel>
+        <Tabs.Panel value="payments" pt="md"><PaymentsTab vehicleId={id} /></Tabs.Panel>
       </Tabs>
     </Stack>
   );

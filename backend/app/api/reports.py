@@ -1,7 +1,9 @@
 import csv
 import io
 
-from fastapi import APIRouter, Depends
+from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -10,7 +12,8 @@ from sqlalchemy.orm import Session
 from app import models as m
 from app.api.deps import owned_vehicle, user_vehicle_ids
 from app.auth import current_user
-from app.clock import as_local_date
+from app import schemas as s
+from app.clock import as_local_date, today_local
 from app.db import get_db
 from app.services import reports as svc
 
@@ -36,6 +39,27 @@ class ReportOut(BaseModel):
 def get_report(vehicle: int | None = None, year: int | None = None, user: m.User = Depends(current_user),
                db: Session = Depends(get_db)):
     return svc.report(db, _scope(db, user, vehicle), year)
+
+
+def _range(lo: date | None, hi: date | None) -> tuple[date, date]:
+    today = today_local()
+    lo = lo or date(today.year, 1, 1)
+    hi = hi or date(lo.year, 12, 31)
+    if hi < lo:
+        raise HTTPException(422, "The end of the range is before its start")
+    if (hi.year - lo.year) * 12 + hi.month - lo.month >= 240:
+        raise HTTPException(422, "Pick a range of at most 20 years")
+    return lo, hi
+
+
+@router.get("/spending", response_model=s.SpendingOut)
+def get_spending(start: date | None = Query(None, alias="from"), end: date | None = Query(None, alias="to"),
+                 vehicle: int | None = None, category: list[str] = Query(default_factory=list),
+                 user: m.User = Depends(current_user), db: Session = Depends(get_db)):
+    """What was spent in a date range (default: this year), by month and category. Recurring payments
+    still to come in the range are only in scheduled_cents."""
+    lo, hi = _range(start, end)
+    return svc.spending(db, _scope(db, user, vehicle), lo, hi, category)
 
 
 def _scope(db: Session, user: m.User, vehicle: int | None) -> list[int]:
@@ -94,3 +118,16 @@ def export_tires(vehicle: int | None = None, user: m.User = Depends(current_user
                          mt.removed_km if mt and mt.removed_km is not None else ""])
     return _csv("tires.csv", ["vehicle", "label", "season", "size", "brand_model", "dot", "cost_cad",
                               "mounted_date", "mounted_km", "removed_date", "removed_km"], rows)
+
+
+@router.get("/export/spending.csv")
+def export_spending(start: date | None = Query(None, alias="from"), end: date | None = Query(None, alias="to"),
+                    vehicle: int | None = None, category: list[str] = Query(default_factory=list),
+                    user: m.User = Depends(current_user), db: Session = Depends(get_db)):
+    lo, hi = _range(start, end)
+    vs = {v.id: v.nickname for v in db.scalars(select(m.Vehicle).where(m.Vehicle.user_id == user.id))}
+    data = svc.spending(db, _scope(db, user, vehicle), lo, hi, category)
+    rows = [[e["date"].isoformat(), vs.get(e["vehicle_id"]), e["category"], e["label"], e["source"],
+             f"{e['cents'] / 100:.2f}", "scheduled" if e["scheduled"] else "paid"]
+            for e in reversed(data["entries"])]
+    return _csv("spending.csv", ["date", "vehicle", "category", "what", "source", "amount_cad", "status"], rows)

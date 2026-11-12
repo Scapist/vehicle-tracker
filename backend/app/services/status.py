@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import models as m
+from app.domain.recurring import next_occurrence
 from app.domain.due import DUE_SOON, OK, OVERDUE, Anchor, Rule, compute_due
 from app.domain.status import ORDER, describe, describe_date_item
 from app.services import odometer
@@ -17,8 +18,8 @@ log = logging.getLogger("status")
 
 @dataclass
 class StatusItem:
-    subject: str  # rule:12 | date:5
-    kind: str  # rule | date
+    subject: str  # rule:12 | date:5 | cost:3
+    kind: str  # rule | date | cost
     id: int
     vehicle_id: int | None
     title: str
@@ -66,6 +67,12 @@ def vehicle_items(db: Session, vehicle_id: int, today: date) -> list[StatusItem]
                                 res.effective_date, cycle, km_remaining=res.km_remaining))
     for di in db.scalars(select(m.DateItem).where(m.DateItem.vehicle_id == vehicle_id)):
         items.append(date_item_status(di, today))
+    for rc in db.scalars(select(m.RecurringCost).where(m.RecurringCost.vehicle_id == vehicle_id,
+                                                       m.RecurringCost.every_months == 12,
+                                                       m.RecurringCost.remind_days.is_not(None))):
+        item = recurring_cost_status(rc, today)
+        if item:
+            items.append(item)
     items.sort(key=lambda i: (ORDER[i.status], i.due or date.max))
     return items
 
@@ -81,6 +88,19 @@ def date_item_status(di: m.DateItem, today: date) -> StatusItem:
     return StatusItem(f"date:{di.id}", "date", di.id, di.vehicle_id, di.title, status,
                       describe_date_item(di.due_date, today), progress, di.due_date,
                       di.due_date.isoformat(), informational=di.informational)
+
+
+def recurring_cost_status(rc: m.RecurringCost, today: date) -> StatusItem | None:
+    """A yearly payment's upcoming renewal. It's paid automatically, so it is never overdue: due soon in
+    the last remind_days before the date, and each year is a new alert cycle."""
+    nxt = next_occurrence(rc.start_date, rc.every_months, rc.end_date, today)
+    if nxt is None:
+        return None
+    n = (nxt - today).days
+    status = DUE_SOON if n <= (rc.remind_days or 0) else OK
+    detail = f"Renews {describe_date_item(nxt, today)} · ${rc.amount_cents / 100:,.2f}"
+    return StatusItem(f"cost:{rc.id}", "cost", rc.id, rc.vehicle_id, rc.name, status, detail,
+                      min(1.0, max(0.0, 1 - n / 365)), nxt, nxt.isoformat())
 
 
 def all_items(db: Session, today: date, user_id: int | None = None) -> list[StatusItem]:

@@ -27,8 +27,10 @@ def _message(db: Session, item: StatusItem, realert: bool) -> tuple[str, str, li
     verb = "is overdue" if item.status == OVERDUE else "is due soon"
     title = f"{prefix}{item.title} {'still ' if realert else ''}{verb}"
     sid = item.subject
-    return title, item.detail, [Action("Done today" if item.kind == "rule" else "Done", f"done:{sid}"),
-                                Action("Snooze 7 d", f"snooze:{sid}:7")]
+    snooze = Action("Snooze 7 d", f"snooze:{sid}:7")
+    if item.kind == "cost":  # paid automatically: nothing to mark done
+        return f"{prefix}{item.title} renews soon", item.detail, [snooze]
+    return title, item.detail, [Action("Done today" if item.kind == "rule" else "Done", f"done:{sid}"), snooze]
 
 
 def _recipient(item: StatusItem) -> str:

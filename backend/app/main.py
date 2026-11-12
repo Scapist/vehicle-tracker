@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app import auth
-from app.api import records, reports, rules, tires, vehicles
+from app.api import costs, records, reports, rules, tires, vehicles
 from app.config import settings
 from app.feed import status as feed_status
 from app.security import BodySizeLimit, RedactingFormatter, guard
@@ -86,7 +86,7 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_host_li
 app.add_middleware(BodySizeLimit)  # outermost: counts streamed bytes before anything parses them
 
 api = APIRouter(prefix="/api/v1")
-for r in (auth.router, vehicles.router, records.router, rules.router, tires.router, reports.router,
+for r in (auth.router, vehicles.router, records.router, rules.router, tires.router, costs.router, reports.router,
           feed_status.router):
     api.include_router(r)
 app.include_router(api)

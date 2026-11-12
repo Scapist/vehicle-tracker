@@ -47,10 +47,17 @@ def read_vehicle(vehicle_id: int, user: m.User = Depends(current_user), db: Sess
 def patch_vehicle(vehicle_id: int, body: s.VehiclePatch, user: m.User = Depends(current_user),
                   db: Session = Depends(get_db)):
     v = owned_vehicle(db, user, vehicle_id)
+    was_archived = v.archived
     for k, val in body.model_dump(exclude_unset=True).items():
         if val is None and k != "vin":  # only the VIN is nullable
             continue
         setattr(v, k, val)
+    if v.archived and not was_archived:
+        # a sold or retired car stops paying: end its recurring payments today (they'd count forever otherwise)
+        today = today_local()
+        for rc in db.scalars(select(m.RecurringCost).where(m.RecurringCost.vehicle_id == v.id)):
+            if rc.end_date is None or rc.end_date > today:
+                rc.end_date = max(today, rc.start_date)
     try:
         db.commit()
     except IntegrityError:

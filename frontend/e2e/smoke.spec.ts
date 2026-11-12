@@ -122,6 +122,40 @@ test("Quick log: switching vehicle does not keep the old vehicle's odometer", as
   }
 });
 
+test("recurring payment counts toward spending and filters by category", async ({ page }) => {
+  const request = page.request;
+  const nick = `Lease${Date.now()}`;
+  const v = await (await request.post("/api/v1/vehicles", {
+    data: { nickname: nick, make: "Mazda", model: "3", year: 2024 },
+  })).json();
+  const year = new Date().getFullYear();
+  try {
+    await page.goto(`/vehicles/${v.id}`);
+    await page.getByRole("tab", { name: "Payments", exact: true }).click();
+    await page.getByRole("button", { name: "Add payment" }).click();
+    await page.getByLabel("Name").fill("Lease");
+    await page.getByRole("textbox", { name: "Category" }).fill("Financing");
+    await page.getByLabel("Amount").fill("300");
+    await page.getByLabel("First payment").fill(`January 1, ${year}`);
+    await page.getByLabel("Name").click(); // closes the calendar (Escape would close the whole modal)
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText("$300.00 / month").filter({ visible: true }).first()).toBeVisible();
+
+    const month = new Date().getMonth() + 1; // Jan 1 .. this month's 1st have all happened
+    await page.goto(`/reports?vehicle=${v.id}`);
+    await expect(page.getByText((month * 300).toLocaleString("en-CA", { style: "currency", currency: "CAD" }))
+      .filter({ visible: true }).first()).toBeVisible();
+    await expect(page.getByText("Lease").filter({ visible: true }).first()).toBeVisible();
+
+    await page.getByRole("textbox", { name: "Categories" }).click();
+    await page.getByRole("option", { name: "Financing" }).click();
+    await page.keyboard.press("Escape");
+    await expect(page).toHaveURL(/category=Financing/);
+  } finally {
+    await request.patch(`/api/v1/vehicles/${v.id}`, { data: { archived: true } });
+  }
+});
+
 for (const scheme of ["light", "dark"] as const) {
   test(`screenshots (${scheme})`, async ({ page }, info) => {
     await page.emulateMedia({ colorScheme: scheme });
@@ -145,6 +179,7 @@ for (const scheme of ["light", "dark"] as const) {
     await go("/vehicles/1"); await snap("vehicle");
     await page.getByRole("tab", { name: "Services", exact: true }).click(); await snap("vehicle-services", 2);
     await page.getByRole("tab", { name: "Reminders", exact: true }).click(); await snap("vehicle-reminders", 3);
+    await page.getByRole("tab", { name: "Payments", exact: true }).click(); await snap("vehicle-payments", 1);
     await go("/tires"); await snap("tires", 2);
     await go("/reports"); await snap("reports", 2);
     await go("/settings"); await snap("settings", 1);

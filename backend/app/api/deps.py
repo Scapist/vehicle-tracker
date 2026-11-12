@@ -63,5 +63,12 @@ def owned_date_item(db: Session, user: m.User, item_id: int) -> m.DateItem:
     return di
 
 
+def owned_recurring_cost(db: Session, user: m.User, cost_id: int) -> m.RecurringCost:
+    rc = db.get(m.RecurringCost, cost_id)
+    if not rc or not find_owned_vehicle(db, user, rc.vehicle_id):
+        raise _missing("Payment")
+    return rc
+
+
 def user_vehicle_ids(db: Session, user: m.User) -> list[int]:
     return list(db.scalars(select(m.Vehicle.id).where(m.Vehicle.user_id == user.id)))

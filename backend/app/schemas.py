@@ -233,3 +233,84 @@ class DashboardOut(BaseModel):
     year_cost_cents: int
     year: int
     mounted_tire_set: TireSetOut | None
+
+
+class RecurringCostIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    category: str = Field(min_length=1, max_length=40)
+    amount_cents: int = Field(gt=0, le=100_000_000)
+    every_months: int = 1
+    start_date: Date
+    end_date: Date | None = None
+    remind_days: int | None = Field(default=None, ge=0, le=365)
+    notes: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("every_months")
+    @classmethod
+    def _every(cls, v: int) -> int:
+        if v not in (1, 3, 6, 12):
+            raise ValueError("must be 1, 3, 6 or 12")
+        return v
+
+
+class RecurringCostPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    category: str | None = Field(default=None, min_length=1, max_length=40)
+    amount_cents: int | None = Field(default=None, gt=0, le=100_000_000)
+    every_months: int | None = None
+    start_date: Date | None = None
+    end_date: Date | None = None
+    remind_days: int | None = Field(default=None, ge=0, le=365)
+    notes: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("every_months")
+    @classmethod
+    def _every(cls, v: int | None) -> int | None:
+        if v is not None and v not in (1, 3, 6, 12):
+            raise ValueError("must be 1, 3, 6 or 12")
+        return v
+
+
+class RecurringCostOut(ORM):
+    id: int
+    vehicle_id: int
+    name: str
+    category: str
+    amount_cents: int
+    every_months: int
+    start_date: Date
+    end_date: Date | None
+    remind_days: int | None
+    notes: str | None
+    next_date: Date | None = None
+
+
+class ChangeAmount(BaseModel):
+    amount_cents: int = Field(gt=0, le=100_000_000)
+    from_date: Date
+
+
+class SpendingMonth(BaseModel):
+    month: str
+    total_cents: int
+    by_category: dict[str, int]
+
+
+class SpendingEntry(BaseModel):
+    date: Date
+    vehicle_id: int
+    category: str
+    cents: int
+    source: str
+    label: str
+    ref_id: int
+    scheduled: bool
+
+
+class SpendingOut(BaseModel):
+    total_cents: int
+    scheduled_cents: int
+    by_category: dict[str, int]
+    by_month: list[SpendingMonth]
+    entries: list[SpendingEntry]
+    categories: list[str]

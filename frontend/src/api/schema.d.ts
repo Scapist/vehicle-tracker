@@ -611,6 +611,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/vehicles/{vehicle_id}/recurring-costs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Costs */
+        get: operations["list_costs_api_v1_vehicles__vehicle_id__recurring_costs_get"];
+        put?: never;
+        /** Create Cost */
+        post: operations["create_cost_api_v1_vehicles__vehicle_id__recurring_costs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recurring-costs/{cost_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Cost */
+        delete: operations["delete_cost_api_v1_recurring_costs__cost_id__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Cost */
+        patch: operations["patch_cost_api_v1_recurring_costs__cost_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/recurring-costs/{cost_id}/change-amount": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change Amount
+         * @description New price from a date on: this payment ends the day before, a copy carries on with the new amount,
+         *     so earlier payments keep their old price.
+         */
+        post: operations["change_amount_api_v1_recurring_costs__cost_id__change_amount_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reports": {
         parameters: {
             query?: never;
@@ -620,6 +677,27 @@ export interface paths {
         };
         /** Get Report */
         get: operations["get_report_api_v1_reports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/spending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Spending
+         * @description What was spent in a date range (default: this year), by month and category. Recurring payments
+         *     still to come in the range are only in scheduled_cents.
+         */
+        get: operations["get_spending_api_v1_spending_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -671,6 +749,23 @@ export interface paths {
         };
         /** Export Tires */
         get: operations["export_tires_api_v1_export_tires_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/export/spending.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export Spending */
+        get: operations["export_spending_api_v1_export_spending_csv_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -768,6 +863,16 @@ export interface components {
              * @default []
              */
             files: string[];
+        };
+        /** ChangeAmount */
+        ChangeAmount: {
+            /** Amount Cents */
+            amount_cents: number;
+            /**
+             * From Date
+             * Format: date
+             */
+            from_date: string;
         };
         /** ChangePasswordIn */
         ChangePasswordIn: {
@@ -953,6 +1058,78 @@ export interface components {
             /** Invalidated */
             invalidated: boolean;
         };
+        /** RecurringCostIn */
+        RecurringCostIn: {
+            /** Name */
+            name: string;
+            /** Category */
+            category: string;
+            /** Amount Cents */
+            amount_cents: number;
+            /**
+             * Every Months
+             * @default 1
+             */
+            every_months: number;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /** End Date */
+            end_date?: string | null;
+            /** Remind Days */
+            remind_days?: number | null;
+            /** Notes */
+            notes?: string | null;
+        };
+        /** RecurringCostOut */
+        RecurringCostOut: {
+            /** Id */
+            id: number;
+            /** Vehicle Id */
+            vehicle_id: number;
+            /** Name */
+            name: string;
+            /** Category */
+            category: string;
+            /** Amount Cents */
+            amount_cents: number;
+            /** Every Months */
+            every_months: number;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /** End Date */
+            end_date: string | null;
+            /** Remind Days */
+            remind_days: number | null;
+            /** Notes */
+            notes: string | null;
+            /** Next Date */
+            next_date?: string | null;
+        };
+        /** RecurringCostPatch */
+        RecurringCostPatch: {
+            /** Name */
+            name?: string | null;
+            /** Category */
+            category?: string | null;
+            /** Amount Cents */
+            amount_cents?: number | null;
+            /** Every Months */
+            every_months?: number | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Remind Days */
+            remind_days?: number | null;
+            /** Notes */
+            notes?: string | null;
+        };
         /** ReportOut */
         ReportOut: {
             /** Years */
@@ -1110,6 +1287,56 @@ export interface components {
              * @default 7
              */
             days: number;
+        };
+        /** SpendingEntry */
+        SpendingEntry: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Vehicle Id */
+            vehicle_id: number;
+            /** Category */
+            category: string;
+            /** Cents */
+            cents: number;
+            /** Source */
+            source: string;
+            /** Label */
+            label: string;
+            /** Ref Id */
+            ref_id: number;
+            /** Scheduled */
+            scheduled: boolean;
+        };
+        /** SpendingMonth */
+        SpendingMonth: {
+            /** Month */
+            month: string;
+            /** Total Cents */
+            total_cents: number;
+            /** By Category */
+            by_category: {
+                [key: string]: number;
+            };
+        };
+        /** SpendingOut */
+        SpendingOut: {
+            /** Total Cents */
+            total_cents: number;
+            /** Scheduled Cents */
+            scheduled_cents: number;
+            /** By Category */
+            by_category: {
+                [key: string]: number;
+            };
+            /** By Month */
+            by_month: components["schemas"]["SpendingMonth"][];
+            /** Entries */
+            entries: components["schemas"]["SpendingEntry"][];
+            /** Categories */
+            categories: string[];
         };
         /** StatusItemOut */
         StatusItemOut: {
@@ -2662,6 +2889,171 @@ export interface operations {
             };
         };
     };
+    list_costs_api_v1_vehicles__vehicle_id__recurring_costs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringCostOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_cost_api_v1_vehicles__vehicle_id__recurring_costs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecurringCostIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringCostOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_cost_api_v1_recurring_costs__cost_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cost_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_cost_api_v1_recurring_costs__cost_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cost_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecurringCostPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringCostOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_amount_api_v1_recurring_costs__cost_id__change_amount_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cost_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeAmount"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringCostOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_report_api_v1_reports_get: {
         parameters: {
             query?: {
@@ -2681,6 +3073,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_spending_api_v1_spending_get: {
+        parameters: {
+            query?: {
+                from?: string | null;
+                to?: string | null;
+                vehicle?: number | null;
+                category?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpendingOut"];
                 };
             };
             /** @description Validation Error */
@@ -2760,6 +3186,40 @@ export interface operations {
         parameters: {
             query?: {
                 vehicle?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_spending_api_v1_export_spending_csv_get: {
+        parameters: {
+            query?: {
+                from?: string | null;
+                to?: string | null;
+                vehicle?: number | null;
+                category?: string[];
             };
             header?: never;
             path?: never;

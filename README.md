@@ -123,6 +123,19 @@ entry as a correction.
 Winter tires: "Add winter-tire reminders" on a vehicle's *Reminders & dates* tab creates "Install by Dec 1" and
 "Can remove after Mar 15". Marking either done asks which tire set is on the car.
 
+## Spending and recurring payments
+
+**Reports** shows what you spent in a period (this month, last month, this year, last year, the last 12 months
+or a custom range), filtered by vehicle and category. It has a month-by-month chart, a breakdown by category,
+every entry, and a `spending.csv` export of exactly what's on screen. The filters are kept in the address, so
+you can bookmark a view.
+
+Payments taken automatically (insurance, financing, registration, parking…) go on a vehicle's **Payments** tab:
+the amount, how often (every 1, 3, 6 or 12 months), the first payment and, optionally, the last one. Each payment
+counts as spent on its date with nothing to confirm; ones still to come in the period are shown as *scheduled*.
+**Change amount…** starts a new price from a date and keeps earlier payments at the old one. Archiving a vehicle
+ends its payments. Yearly payments can send a Telegram heads-up a set number of days before they renew.
+
 ## Backup and restore
 
 ```sh

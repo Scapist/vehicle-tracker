@@ -102,6 +102,10 @@ def seed_demo(db: Session, today: date | None = None, user: m.User | None = None
                                  removed_date=today - timedelta(days=200), removed_km=77000)]
     winter.treads = [m.TireTread(date=today - timedelta(days=210), depth_mm=4.5)]
     db.add_all([summer, winter])
+    db.add(m.RecurringCost(vehicle_id=v.id, name="Car insurance", category="Insurance", amount_cents=14200,
+                           every_months=1, start_date=date(today.year - 1, 1, 5)))
+    db.add(m.RecurringCost(vehicle_id=v.id, name="SAAQ registration", category="Registration", amount_cents=32000,
+                           every_months=12, start_date=date(today.year - 1, 6, 30)))
     db.commit()
 
 

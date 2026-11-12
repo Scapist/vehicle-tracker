@@ -73,7 +73,7 @@ export function ItemCard({ item, compact }: { item: StatusItem; compact?: boolea
             aria-label={`${Math.round(item.progress * 100)}% of the interval used`}
           />
         )}
-        {needsAction && !item.informational && (
+        {needsAction && !item.informational && item.kind !== "cost" && (
           <Group gap="xs">
             <Button size="compact-sm" onClick={item.kind === "rule" ? doneRule : isWinter ? tires.open : () => doneDate()}>
               {item.kind === "rule" ? "Done today" : "Mark done"}

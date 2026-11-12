@@ -11,3 +11,6 @@ export type Rule = S["RuleOut"];
 export type DateItem = S["DateItemOut"];
 export type TireSet = S["TireSetOut"];
 export type Report = S["ReportOut"];
+export type RecurringCost = S["RecurringCostOut"];
+export type Spending = S["SpendingOut"];
+export type SpendingEntry = S["SpendingEntry"];

@@ -132,6 +132,22 @@ class DateItem(Base):
     informational: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+class RecurringCost(Base):
+    """A payment that repeats on its own (insurance, financing, registration). Each occurrence counts as
+    spent once its date has passed. A price change ends this row and starts a new one, keeping history."""
+    __tablename__ = "recurring_cost"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    vehicle_id: Mapped[int] = mapped_column(ForeignKey("vehicle.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    category: Mapped[str] = mapped_column(String(40))
+    amount_cents: Mapped[int]
+    every_months: Mapped[int]  # 1 | 3 | 6 | 12
+    start_date: Mapped[date] = mapped_column(Date)  # first payment; sets the day of the month
+    end_date: Mapped[date | None] = mapped_column(Date)  # no payments after this
+    remind_days: Mapped[int | None]  # yearly payments only: heads-up this many days ahead
+    notes: Mapped[str | None] = mapped_column(Text)
+
+
 class TireSet(Base):
     __tablename__ = "tire_set"
     id: Mapped[int] = mapped_column(primary_key=True)
