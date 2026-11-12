@@ -70,7 +70,7 @@ export default function Shell(): ReactNode {
         </Stack>
       </AppShell.Navbar>
 
-      <AppShell.Main pb={mobile ? 96 : undefined}>
+      <AppShell.Main pb={mobile ? "calc(var(--app-shell-footer-offset, 0px) + 88px)" : undefined}>
         <Outlet />
       </AppShell.Main>
 
@@ -89,7 +89,7 @@ export default function Shell(): ReactNode {
       </AppShell.Footer>
 
       {mobile && (
-        <Affix position={{ bottom: 78, right: 16 }}>
+        <Affix position={{ bottom: "calc(var(--app-shell-footer-offset, 0px) + 20px)", right: 16 }}>
           <Button size="md" radius="xl" leftSection={<IconPlus size={18} />} onClick={() => quick.open("mileage", currentVehicleId)}
             style={{ boxShadow: "var(--mantine-shadow-md)" }}>
             Quick log
