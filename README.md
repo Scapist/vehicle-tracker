@@ -170,6 +170,7 @@ Schema changes: `cd backend && uv run alembic revision --autogenerate -m "what c
 `bot` is the Telegram side. `app/notify` (Notifier protocol, Telegram/log senders, outbox with retry) has no
 imports from the vehicle code so other tools can reuse it. `GET /api/v1/status` is the normalized feed
 (`source, subject, title, status, due, detail_url`) for a shared dashboard.
+For a guided tour of the design, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Limits
 
