@@ -168,10 +168,12 @@ extract the receipts tarball into `data/`, then `docker compose up -d`.
 
 ## Deploy to the home server
 
-The server (`<user>@<server-ip>`) has a git repo with a deploy hook, so shipping a change is a push:
+The server (`<user>@<server-ip>`) has a git repo with a deploy hook. `origin` pushes to both GitHub and the
+server, so shipping a change is a normal push:
 
 ```sh
-git push home main
+git push               # GitHub + server (deploys)
+git push home main     # server only
 ```
 
 The push output shows the deploy. The hook snapshots the database to `data/pre-deploy/` (last 10 kept),
@@ -179,8 +181,16 @@ checks out the code into `~/vehicle-tracker`, rebuilds, and waits for `/healthz`
 become healthy, it puts the previous code and database back and restarts that instead. `.env` and `data/` on
 the server are never touched. Only `main` deploys; pushes of other branches are ignored.
 
-One-time setup on a new PC: `git remote add home <user>@<server-ip>:git/vehicle-tracker.git`
-(needs your SSH key on the server). The hook itself lives at `~/git/vehicle-tracker.git/hooks/post-receive`.
+One-time setup on a new PC (needs your SSH key on the server):
+
+```sh
+git remote add home <user>@<server-ip>:git/vehicle-tracker.git
+git remote set-url --add --push origin https://github.com/Scapist/vehicle-tracker.git
+git remote set-url --add --push origin <user>@<server-ip>:git/vehicle-tracker.git
+```
+
+The server is only reachable on the home network, so away from home the server half of `git push` fails
+(GitHub still updates); push again once you're back. The hook itself lives at `~/git/vehicle-tracker.git/hooks/post-receive`.
 
 ## Development
 
