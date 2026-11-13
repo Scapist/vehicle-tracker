@@ -1,6 +1,8 @@
 services:
   tracker:
     build: .
+    image: vehicle-tracker
+    container_name: vehicle-tracker
     ports:
       - "${BIND_ADDR:-127.0.0.1}:8000:8000"
     env_file:

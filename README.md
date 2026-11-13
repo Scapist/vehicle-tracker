@@ -166,6 +166,22 @@ Cron example (daily 03:00):
 Restore: `docker compose down`, put the `.sqlite3` back as `data/tracker.sqlite3` (delete any `-wal`/`-shm` files next to it),
 extract the receipts tarball into `data/`, then `docker compose up -d`.
 
+## Deploy to the home server
+
+The server (`<user>@<server-ip>`) has a git repo with a deploy hook, so shipping a change is a push:
+
+```sh
+git push home main
+```
+
+The push output shows the deploy. The hook snapshots the database to `data/pre-deploy/` (last 10 kept),
+checks out the code into `~/vehicle-tracker`, rebuilds, and waits for `/healthz`. If the new version doesn't
+become healthy, it puts the previous code and database back and restarts that instead. `.env` and `data/` on
+the server are never touched. Only `main` deploys; pushes of other branches are ignored.
+
+One-time setup on a new PC: `git remote add home <user>@<server-ip>:git/vehicle-tracker.git`
+(needs your SSH key on the server). The hook itself lives at `~/git/vehicle-tracker.git/hooks/post-receive`.
+
 ## Development
 
 ```sh
