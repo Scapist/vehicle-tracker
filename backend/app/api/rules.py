@@ -16,6 +16,7 @@ from app.domain.due import roll_yearly
 from app.services import evaluator_hook, odometer, records, status, tires, views
 
 router = APIRouter(tags=["rules"])
+WINTER_KINDS = ("winter_install", "winter_remove")  # one of each per vehicle
 
 
 class Snooze(BaseModel):
@@ -133,6 +134,11 @@ def list_date_items(vehicle_id: int | None = None, user: m.User = Depends(curren
 def create_date_item(body: s.DateItemIn, user: m.User = Depends(current_user), db: Session = Depends(get_db)):
     if body.vehicle_id is not None:
         owned_vehicle(db, user, body.vehicle_id)
+    if body.kind in WINTER_KINDS and db.scalar(select(m.DateItem.id).where(
+            m.DateItem.user_id == user.id, m.DateItem.vehicle_id.is_(body.vehicle_id)
+            if body.vehicle_id is None else m.DateItem.vehicle_id == body.vehicle_id,
+            m.DateItem.kind == body.kind)):
+        raise HTTPException(409, "This vehicle already has that winter-tire reminder")
     di = m.DateItem(**body.model_dump(), user_id=user.id)
     db.add(di)
     db.commit()

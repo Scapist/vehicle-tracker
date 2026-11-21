@@ -185,6 +185,33 @@ test("a service entry in Reports opens its details", async ({ page }) => {
   await expect(page.getByRole("dialog").getByText("Garage Pro").first()).toBeVisible();
 });
 
+test("a logged service can be edited and deleted", async ({ page }, info) => {
+  const vendor = `Edit-me ${info.project.name}`;
+  const r = await page.request.post("/api/v1/services", {
+    multipart: { vehicle_id: "1", date: "2026-11-01", cost_cents: "5000", vendor },
+  });
+  expect(r.ok()).toBe(true);
+  await page.goto("/vehicles/1");
+  await page.getByRole("tab", { name: "Services", exact: true }).click();
+  await page.getByText(vendor).filter({ visible: true }).first().click();
+  await page.getByRole("button", { name: "Edit" }).click();
+  await page.getByLabel("Shop / vendor").fill(`${vendor} fixed`);
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByText("Service updated")).toBeVisible();
+  await expect(page.getByRole("dialog").getByText(`${vendor} fixed`)).toBeVisible();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByRole("button", { name: "Delete, including receipts" }).click();
+  await expect(page.getByText("Service deleted")).toBeVisible();
+  await expect(page.getByText(`${vendor} fixed`).filter({ visible: true })).toHaveCount(0);
+});
+
+test("winter-tire reminders can't be added twice", async ({ page }) => {
+  await page.goto("/vehicles/1");
+  await page.getByRole("tab", { name: "Reminders", exact: true }).click();
+  await expect(page.getByText("Install winter tires by Dec 1")).toBeVisible(); // the demo car has them
+  await expect(page.getByRole("button", { name: "Add winter-tire reminders" })).toHaveCount(0);
+});
+
 test("mileage nudge can be set per vehicle", async ({ page }) => {
   const request = page.request;
   const v = await (await request.post("/api/v1/vehicles", {

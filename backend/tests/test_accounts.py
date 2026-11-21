@@ -217,6 +217,8 @@ def test_other_users_data_is_invisible_everywhere(two_users, demo):
         ("post", f"/api/v1/tire-sets/{tire}/mount", None), ("patch", f"/api/v1/tire-sets/{tire}", {"label": "x"}),
         ("post", f"/api/v1/tire-sets/{tire}/tread", {"depth_mm": 2}),
         ("post", "/api/v1/tire-sets", {"vehicle_id": 1, "label": "x", "season": "winter"}),
+        ("patch", f"/api/v1/services/{service}", {"notes": "mine now"}),
+        ("delete", f"/api/v1/attachments/{att}", None),
         ("delete", f"/api/v1/services/{service}", None),
     ]
     for method, path, body in not_found:
