@@ -50,9 +50,7 @@ user (uid 10001) the owner of `./data`, so you'll need `sudo` to touch those fil
 | [docs/GUIDE.md](docs/GUIDE.md) | Using the app: vehicles, reminders, insurance and registration, tires, payments, reports, chat bots, and setting it all up through an AI assistant |
 | [docs/DEPLOY.md](docs/DEPLOY.md) | Installing and running it: configuration, reaching it from your phone, Telegram and Discord bots, MCP, updates, backups |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How it's built and why: a guided tour of the code |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Proposing changes and new features |
 | [CLAUDE.md](CLAUDE.md) | Project summary and rules for AI coding assistants (useful for humans too) |
-| [SECURITY.md](SECURITY.md) | Reporting a vulnerability |
 
 ## Tech
 
@@ -76,7 +74,20 @@ npm run build            # type-check + production build
 npm run e2e              # Playwright at 1280px and 390px
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the rest (API types, migrations, conventions).
+[CLAUDE.md](CLAUDE.md) has the rest: layout, API types, migrations and conventions.
+
+## Contributing
+
+Ideas, fixes and new features are welcome. For anything bigger than a small fix, open an issue first to describe
+it, then send a pull request from a branch of your fork. Every change is reviewed before it's merged.
+
+- Run `uv run pytest -q` (backend) and `npm run build` (frontend) before opening it; the CI runs them too.
+- Follow the rules in [CLAUDE.md](CLAUDE.md): ownership checks on every access, tests for new behaviour, safe
+  migrations, regenerated API types, updated docs, and no secrets or personal data.
+- Using Claude Code or another AI assistant is fine: `CLAUDE.md` (also `AGENTS.md`) tells it how the app is built.
+
+Found a security problem? Please don't post it in a public issue; use the repository's **Security** tab →
+*Report a vulnerability*.
 
 ## License
 

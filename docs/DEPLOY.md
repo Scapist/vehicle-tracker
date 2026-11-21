@@ -241,4 +241,4 @@ Keep `.env` and `data/` outside what the hook overwrites, and snapshot `data/tra
   password.
 - The bot tokens and MCP tokens in `.env` and Settings are as good as your password. Anyone with shell access as
   a user in the `docker` group can read everything; protect the server account (SSH keys, no password logins).
-- Report vulnerabilities as described in [SECURITY.md](../SECURITY.md).
+- Report vulnerabilities privately through the repository's **Security** tab → *Report a vulnerability*.
