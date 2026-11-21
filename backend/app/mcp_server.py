@@ -248,12 +248,16 @@ def receipt_upload_link_impl(db, user: m.User, service_id: int, base_url: str,
 mcp = MCPServer(
     "Vehicle Tracker",
     instructions=(
-        "A personal vehicle maintenance tracker (km, CAD). Use list_vehicles first to learn the nicknames. "
-        "Amounts are dollars. Before log_service, call list_service_types and use those exact names; anything "
-        "else goes in notes. If the user shows you a receipt, read it yourself (date, total with taxes, vendor, "
-        "odometer at the visit, what was done), confirm with them, then log it; to keep the file, call "
-        "attach_receipt if you have its bytes, otherwise receipt_upload_link. Nothing can be edited or deleted "
-        "through these tools; tell the user to do that in the app."),
+        "A personal vehicle maintenance tracker (km; amounts in dollars). Start with list_vehicles to learn the "
+        "nicknames. To log: before log_service call list_service_types and use those exact names (anything else goes "
+        "in notes). If the user shows you a receipt, read it yourself (date, total with taxes, vendor, odometer at "
+        "the visit, what was done), confirm with them, then log it; to keep the file call attach_receipt if you have "
+        "its bytes, otherwise receipt_upload_link. To set things up: add_vehicle, then add_reminder for each "
+        "maintenance item (e.g. oil every 8,000 km or 12 months), add_date for insurance and registration renewals, "
+        "add_winter_tire_reminders if they swap tires for winter, add_tire_set, and add_recurring_payment for "
+        "automatic payments such as monthly insurance or financing. Ask for the details you need rather than "
+        "guessing dates or amounts. Nothing can be edited or deleted through these tools; tell the user to do that "
+        "in the app."),
 )
 
 
@@ -510,3 +514,6 @@ def _escape(text: str) -> str:
 def token_count(db, user: m.User) -> int:
     return db.scalar(select(func.count()).select_from(m.ApiToken).where(
         m.ApiToken.user_id == user.id, m.ApiToken.revoked_at.is_(None))) or 0
+
+
+from app import mcp_setup  # noqa: E402,F401  (registers the setup tools on `mcp`)

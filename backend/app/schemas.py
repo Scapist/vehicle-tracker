@@ -123,22 +123,22 @@ class StatusItemOut(BaseModel):
 
 class RuleIn(BaseModel):
     service_type_id: int
-    interval_km: int | None = Field(default=None, gt=0)
-    interval_months: int | None = Field(default=None, gt=0)
-    soon_km: int = Field(default=1000, ge=0)
-    soon_days: int = Field(default=30, ge=0)
+    interval_km: int | None = Field(default=None, gt=0, le=1_000_000)
+    interval_months: int | None = Field(default=None, gt=0, le=240)
+    soon_km: int = Field(default=1000, ge=0, le=1_000_000)
+    soon_days: int = Field(default=30, ge=0, le=3650)
     baseline_date: Date | None = None
-    baseline_km: int | None = None
+    baseline_km: int | None = Field(default=None, ge=0, le=2_000_000)
     enabled: bool = True
 
 
 class RulePatch(BaseModel):
-    interval_km: int | None = Field(default=None, gt=0)
-    interval_months: int | None = Field(default=None, gt=0)
-    soon_km: int | None = Field(default=None, ge=0)
-    soon_days: int | None = Field(default=None, ge=0)
+    interval_km: int | None = Field(default=None, gt=0, le=1_000_000)
+    interval_months: int | None = Field(default=None, gt=0, le=240)
+    soon_km: int | None = Field(default=None, ge=0, le=1_000_000)
+    soon_days: int | None = Field(default=None, ge=0, le=3650)
     baseline_date: Date | None = None
-    baseline_km: int | None = None
+    baseline_km: int | None = Field(default=None, ge=0, le=2_000_000)
     enabled: bool | None = None
 
 
@@ -161,7 +161,7 @@ class DateItemIn(BaseModel):
     title: str = Field(min_length=1, max_length=120)
     due_date: Date
     recurs_yearly: bool = False
-    soon_days: int = 30
+    soon_days: int = Field(default=30, ge=0, le=3650)
     informational: bool = False
 
 
@@ -207,7 +207,7 @@ class TireSetIn(BaseModel):
     brand_model: str | None = None
     dot_code: str | None = None
     purchase_date: Date | None = None
-    cost_cents: int | None = None
+    cost_cents: int | None = Field(default=None, ge=0, le=100_000_000)
     storage_location: str | None = None
 
 

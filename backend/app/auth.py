@@ -102,7 +102,7 @@ def parse_token(token: str | None) -> tuple[int, int] | None:
         uid_i, ver_i, exp_i = int(uid), int(ver), int(exp)
     except ValueError:
         return None
-    if exp_i < time.time() or not hmac.compare_digest(sig, _sign(uid_i, ver_i, exp_i)):
+    if exp_i < time.time() or not hmac.compare_digest(sig.encode(), _sign(uid_i, ver_i, exp_i).encode()):
         return None
     return uid_i, ver_i
 
@@ -283,7 +283,7 @@ def setup(body: SetupIn, request: Request, response: Response, db: Session = Dep
         raise HTTPException(409, "The owner account already exists. Sign in instead.")
     client = "guess:" + _client(request)  # setup codes / invite links: the strict limit
     _check_lock(client)
-    if not hmac.compare_digest(body.setup_code.strip().upper(), ensure_setup_code()):
+    if not hmac.compare_digest(body.setup_code.strip().upper().encode(), ensure_setup_code().encode()):
         _fail(client)
         raise HTTPException(403, "That setup code is wrong. It's printed in the server log.")
     user = m.User(email=body.email, name=body.name, password_hash=hash_password(body.password), is_owner=True)

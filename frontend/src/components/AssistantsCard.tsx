@@ -113,7 +113,7 @@ export function AssistantsCard() {
             )}
             <Text size="sm" fw={500}>Claude Code</Text>
             <Code block style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
-              {`claude mcp add --transport http tracker ${url} --header "Authorization: Bearer ${token}"`}
+              {`claude mcp add --scope user --transport http tracker ${url} --header "Authorization: Bearer ${token}"`}
             </Code>
             <Text size="sm" fw={500}>Claude Desktop (claude_desktop_config.json)</Text>
             <Code block style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{desktop}</Code>

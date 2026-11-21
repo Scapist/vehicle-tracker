@@ -96,6 +96,8 @@ def log_km(db: Session, user: m.User, vid: int, km: int, confirmed: bool, correc
              and not i.informational]
     if worst:
         text += f"\nNext: {worst[0].title}, {worst[0].detail}"
+    if correction:  # deleting a correction couldn't restore the readings it replaced, so no undo button
+        return Reply(text)
     return Reply(text, [("Wrong vehicle", f"wrong:{r.id}")])
 
 
@@ -113,6 +115,8 @@ def handle_callback(db: Session, user: m.User, data: str, channel: str = "telegr
             r = db.get(m.OdometerReading, int(parts[1]))
             if not r or not _vehicle(db, user, r.vehicle_id):
                 return Reply("That reading is already gone.")
+            if r.is_correction:
+                return Reply("A correction can't be moved. Log the right reading in the app instead.")
             km, old = r.km, r.vehicle_id
             db.delete(r)
             db.commit()

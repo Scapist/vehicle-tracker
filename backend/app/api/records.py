@@ -98,8 +98,8 @@ def list_services(vehicle_id: int, user: m.User = Depends(current_user), db: Ses
 async def create_service(
     vehicle_id: int = Form(),
     on: date = Form(alias="date"),
-    odometer_km: int | None = Form(default=None, ge=0),
-    cost_cents: int = Form(default=0, ge=0),
+    odometer_km: int | None = Form(default=None, ge=0, le=2_000_000),
+    cost_cents: int = Form(default=0, ge=0, le=100_000_000),
     vendor: str | None = Form(default=None, max_length=120),
     notes: str | None = Form(default=None, max_length=5000),
     type_ids: list[int] = Form(default=[]),
@@ -113,7 +113,7 @@ async def create_service(
         raise HTTPException(422, "The service date can't be in the future")
     try:
         costs: dict[str, int] = {str(k): int(v) for k, v in (json.loads(item_costs) if item_costs else {}).items()}
-    except (ValueError, TypeError, AttributeError):
+    except (ValueError, TypeError, AttributeError, OverflowError):
         raise HTTPException(422, "item_costs must be a JSON object of service type id -> cents")
     if any(v < 0 for v in costs.values()):
         raise HTTPException(422, "Item costs can't be negative")
@@ -143,13 +143,11 @@ async def create_service(
 @router.delete("/services/{service_id}", status_code=204)
 def delete_service(service_id: int, user: m.User = Depends(current_user), db: Session = Depends(get_db)):
     rec = owned_service(db, user, service_id)
-    for att in rec.attachments:
-        try:
-            records.attachment_path(att).unlink()
-        except FileNotFoundError:
-            pass
+    paths = [records.attachment_path(att) for att in rec.attachments]
     db.delete(rec)
-    db.commit()
+    db.commit()  # first, so a failed commit never leaves rows pointing at deleted files
+    for path in paths:
+        path.unlink(missing_ok=True)
 
 
 @router.post("/services/{service_id}/attachments", response_model=s.AttachmentOut, status_code=201)

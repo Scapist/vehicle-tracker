@@ -180,11 +180,17 @@ The network is pushed to a thin edge, so the bot tests never talk to Telegram.
 Button presses carry raw IDs (`done:rule:12`), and anyone can craft one. So `logic.py` re-checks ownership on
 **every** callback. Never trust data just because your own code produced it earlier.
 
-## 6b. The MCP server (`app/mcp_server.py`)
+## 6b. The MCP server (`app/mcp_server.py`, `app/mcp_setup.py`)
 
-MCP (Model Context Protocol) lets an AI assistant such as Claude call *tools*: here `list_vehicles`,
-`whats_due`, `service_history`, `spending`, `log_odometer`, `log_service`, `attach_receipt` and
-`receipt_upload_link`. It's off unless `MCP_ENABLED=true`.
+MCP (Model Context Protocol) lets an AI assistant such as Claude call *tools*. It's off unless `MCP_ENABLED=true`.
+
+- **Read and log** (`mcp_server.py`): `list_vehicles`, `whats_due`, `service_history`, `spending`,
+  `list_service_types`, `log_odometer`, `log_service`, `attach_receipt`, `receipt_upload_link`.
+- **Set up** (`mcp_setup.py`): `add_vehicle`, `add_reminder`, `add_date`, `add_winter_tire_reminders`,
+  `add_tire_set`, `add_recurring_payment`. These call the API's own route functions (`create_rule`,
+  `create_date_item`, ...) and turn their `HTTPException`s into `ToolError`s, so a form in the app and a
+  sentence to an assistant go through exactly the same validation. The user-facing table is in
+  [GUIDE.md](GUIDE.md#setting-up-with-an-ai-assistant).
 
 - **Same rules as the app.** Each tool is a plain function `(db, user, ...)` that calls the same services and
   ownership checks the API uses; the `@mcp.tool` wrappers only find the user and open a session. So the tests
