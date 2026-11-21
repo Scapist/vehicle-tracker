@@ -102,6 +102,9 @@ def delete_odometer(vehicle_id: int, reading_id: int, user: m.User = Depends(cur
     r = db.get(m.OdometerReading, reading_id)
     if not r or r.vehicle_id != vehicle_id:
         raise HTTPException(404)
+    if r.is_correction:
+        # it marked the higher readings before it as wrong, and deleting it couldn't tell which to bring back
+        raise HTTPException(409, "A correction can't be deleted. Log the right reading as a new correction instead.")
     db.delete(r)
     db.commit()
     evaluator_hook.after_change(db, user.id)

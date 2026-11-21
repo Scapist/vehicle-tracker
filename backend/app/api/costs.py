@@ -66,7 +66,10 @@ def patch_cost(cost_id: int, body: s.RecurringCostPatch, user: m.User = Depends(
 
 @router.delete("/recurring-costs/{cost_id}", status_code=204)
 def delete_cost(cost_id: int, user: m.User = Depends(current_user), db: Session = Depends(get_db)):
+    from app.evaluator import forget_alerts
+
     db.delete(owned_recurring_cost(db, user, cost_id))
+    forget_alerts(db, f"cost:{cost_id}")
     db.commit()
 
 

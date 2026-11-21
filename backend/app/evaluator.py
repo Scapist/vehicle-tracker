@@ -2,7 +2,7 @@
 import logging
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app import models as m
@@ -63,6 +63,15 @@ def alert_address(user: m.User) -> str | None:
         return None
     channel = user.alert_channel if user.alert_channel in linked else next(iter(linked))
     return f"{channel}:{linked[channel]}"
+
+
+def forget_alerts(db: Session, subject: str) -> None:
+    """Call when deleting a rule/date/payment. SQLite can hand its id to the next new one, which would otherwise
+    inherit this one's alert state and used dedupe keys, and never alert."""
+    from app.notify.models import NotificationOutbox
+
+    db.execute(delete(m.AlertState).where(m.AlertState.subject == subject))
+    db.execute(delete(NotificationOutbox).where(NotificationOutbox.dedupe_key.like(f"{subject}|%")))
 
 
 def evaluate(db: Session, today=None, now: datetime | None = None, user_id: int | None = None) -> int:

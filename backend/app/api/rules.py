@@ -66,7 +66,10 @@ def patch_rule(rule_id: int, body: s.RulePatch, user: m.User = Depends(current_u
 
 @router.delete("/rules/{rule_id}", status_code=204)
 def delete_rule(rule_id: int, user: m.User = Depends(current_user), db: Session = Depends(get_db)):
+    from app.evaluator import forget_alerts
+
     db.delete(owned_rule(db, user, rule_id))
+    forget_alerts(db, f"rule:{rule_id}")
     db.commit()
 
 
@@ -139,7 +142,10 @@ def create_date_item(body: s.DateItemIn, user: m.User = Depends(current_user), d
 
 @router.delete("/date-items/{item_id}", status_code=204)
 def delete_date_item(item_id: int, user: m.User = Depends(current_user), db: Session = Depends(get_db)):
+    from app.evaluator import forget_alerts
+
     db.delete(owned_date_item(db, user, item_id))
+    forget_alerts(db, f"date:{item_id}")
     db.commit()
 
 
