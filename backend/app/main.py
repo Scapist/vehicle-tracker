@@ -14,7 +14,7 @@ from app import auth, mcp_server
 from app.api import costs, records, reports, rules, tires, tokens, vehicles
 from app.config import settings
 from app.feed import status as feed_status
-from app.security import BodySizeLimit, RedactingFormatter, guard
+from app.security import BodySizeLimit, RedactingFormatter, RedactingWrapper, guard
 
 logging.basicConfig(level=logging.INFO)
 for _h in logging.getLogger().handlers:
@@ -22,7 +22,8 @@ for _h in logging.getLogger().handlers:
 for _name in ("uvicorn.access", "uvicorn.error"):
     # uvicorn's loggers have handlers of their own; access lines can carry one-time upload links
     for _h in logging.getLogger(_name).handlers:
-        _h.setFormatter(RedactingFormatter(getattr(_h.formatter, "_fmt", None) or "%(message)s"))
+        if not isinstance(_h.formatter, RedactingWrapper):
+            _h.setFormatter(RedactingWrapper(_h.formatter))
 # httpx logs full request URLs, which include the Telegram bot token
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)

@@ -94,3 +94,15 @@ def test_log_lines_redact_bot_token():
                             None, None)
     out = fmt.format(rec)
     assert "FAKEtoken" not in out and "<redacted>" in out
+
+
+def test_uvicorn_access_lines_keep_their_format_and_lose_tokens():
+    from uvicorn.logging import AccessFormatter
+
+    from app.security import RedactingWrapper
+
+    fmt = RedactingWrapper(AccessFormatter('%(levelprefix)s %(client_addr)s - "%(request_line)s" %(status_code)s'))
+    rec = logging.LogRecord("uvicorn.access", logging.INFO, __file__, 1, '%s - "%s %s HTTP/%s" %d',
+                            ("1.2.3.4:5", "GET", "/receipt-upload/vu_" + "a" * 32, "1.1", 200), None)
+    line = fmt.format(rec)
+    assert "INFO" in line and "/receipt-upload/<redacted>" in line and "vu_" not in line

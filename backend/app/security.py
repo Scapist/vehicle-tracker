@@ -109,3 +109,14 @@ class RedactingFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         return _TOKEN.sub("<redacted>", super().format(record))
+
+
+class RedactingWrapper(logging.Formatter):
+    """Redacts the output of another formatter, keeping it as it is (uvicorn's add fields such as levelprefix)."""
+
+    def __init__(self, inner: logging.Formatter | None) -> None:
+        super().__init__()
+        self.inner = inner or logging.Formatter("%(message)s")
+
+    def format(self, record: logging.LogRecord) -> str:
+        return _TOKEN.sub("<redacted>", self.inner.format(record))
