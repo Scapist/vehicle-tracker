@@ -39,11 +39,30 @@ def _recipient(item: StatusItem) -> str:
 
 
 def resolve_recipient(db: Session, recipient: str | None) -> str | None:
-    """'user:12' -> that account's Telegram chat id right now, or None (held until they link one)."""
+    """'user:12' -> where that account gets alerts right now, e.g. 'discord:4567' or 'telegram:111',
+    or None (held until they link a chat app)."""
     if not recipient or not recipient.startswith("user:"):
         return None
     user = db.get(m.User, int(recipient.split(":", 1)[1]))
-    return str(user.telegram_chat_id) if user and user.telegram_chat_id else None
+    return alert_address(user) if user else None
+
+
+def linked_channels(user: m.User) -> dict[str, int]:
+    """The user's linked chat apps that this server can currently reach, in preference order."""
+    from app.notify.factory import available_channels
+
+    linked = {"telegram": user.telegram_chat_id, "discord": user.discord_user_id}
+    # with no bot configured at all (log mode), keep every link: alerts only go to the log anyway
+    reachable = available_channels() or list(linked)
+    return {ch: linked[ch] for ch in reachable if linked.get(ch)}
+
+
+def alert_address(user: m.User) -> str | None:
+    linked = linked_channels(user)
+    if not linked:
+        return None
+    channel = user.alert_channel if user.alert_channel in linked else next(iter(linked))
+    return f"{channel}:{linked[channel]}"
 
 
 def evaluate(db: Session, today=None, now: datetime | None = None, user_id: int | None = None) -> int:

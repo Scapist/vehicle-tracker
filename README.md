@@ -1,7 +1,8 @@
 # Vehicle Maintenance Tracker
 
 Self-hosted tracker for mileage, services, costs, receipts and tire sets. It warns you ahead of time
-(by km, by date, or whichever comes first) through Telegram, and you can text it your odometer reading.
+(by km, by date, or whichever comes first) through Telegram or Discord, you can text it your odometer reading,
+and an AI assistant such as Claude can read and log for you over MCP.
 
 - **Backend:** FastAPI, SQLAlchemy 2 + Alembic, SQLite (WAL), APScheduler, python-telegram-bot
 - **Frontend:** React + Vite + TypeScript, Mantine (responsive, dark mode, installable PWA)
@@ -82,7 +83,13 @@ The app runs as an unprivileged user (uid 10001). On start, the container hands 
 (for example when it was created by your own account or an older image), then drops all privileges.
 Before applying a database migration it saves a copy in `data/backups/`.
 
-## Telegram
+## Chat apps: Telegram and Discord
+
+You can use either or both. Each person links their own apps in Settings → **Chat apps**, can text their km to any
+of them, and picks one under **Send alerts to** when both are linked. The bots only answer direct messages, and
+only for linked accounts.
+
+### Telegram
 
 1. Create a bot with [@BotFather](https://t.me/BotFather) and copy the token.
 2. In `.env`, then `docker compose up -d`:
@@ -96,7 +103,27 @@ Before applying a database migration it saves a copy in `data/backups/`.
    `/link CODE` to the bot. The bot then answers that chat as that account (their vehicles only) and sends
    their alerts there. Unlinked chats only get instructions on how to link, and group chats are ignored.
 
-The bot uses long polling, so no public URL is needed. What it understands:
+### Discord
+
+1. At <https://discord.com/developers/applications> create an application, open **Bot**, reset and copy the
+   token, and turn **Public Bot** off (so only you can add it anywhere). No privileged intents are needed.
+2. In `.env`, then `docker compose up -d`:
+
+   ```
+   NOTIFIER=telegram          # any value except "log" turns the chat apps on
+   DISCORD_BOT_TOKEN=...
+   # optional: ignore every Discord user except these ids
+   # DISCORD_ALLOWED_USER_IDS=123456789012345678
+   ```
+
+3. Open a DM with the bot: in the developer portal, **Installation** → install it as a *User Install* and open the
+   link, or share a server with it, then right-click the bot → *Message*.
+4. In the app, Settings → Chat apps → Discord → **Connect**, and send the bot the `!link CODE` it shows.
+
+Commands are `!due`, `!vehicles` and `!help`; everything else (km readings, receipt files, buttons) works as on
+Telegram.
+
+Both bots connect out to Telegram/Discord, so no public URL is needed. What they understand:
 
 | You send | Result |
 |---|---|
@@ -116,6 +143,38 @@ Alerts arrive with **Done today** (logs the service at the current km) and **Sno
 An alert fires once when an item moves into *due soon* or *overdue*; logging a service starts a new cycle,
 and a snoozed item that is still due re-alerts once after the snooze ends. With `NOTIFIER=log` (the default)
 alerts are only written to the container log, which is handy for testing.
+
+## AI assistants (MCP)
+
+The app can act as an [MCP](https://modelcontextprotocol.io) server, so an assistant such as Claude can answer
+"when is my next oil change?" or "log an oil change today at 85,000 km, $86.40 at Speedy". Show Claude a receipt
+photo and it can read it and log it for you.
+
+It can read your vehicles, what's due, service history and spending, log odometer readings and services, and
+attach receipts. It **can't edit or delete** anything. It acts as one account and sees only that account's data.
+
+1. In `.env`: `MCP_ENABLED=true`, then `docker compose up -d`. By default (`MCP_USERS=owner`) only the owner
+   account can use it; `MCP_USERS=all` lets every account make their own tokens.
+2. In the app, Settings → **AI assistants** → **Create token**. Copy it: it's shown once (only a hash is stored).
+   Revoke it there if it leaks.
+3. Connect your assistant (the Settings card shows these with your address filled in):
+
+   ```sh
+   # Claude Code
+   claude mcp add --transport http tracker http://<your-server>:8000/mcp --header "Authorization: Bearer <token>"
+   ```
+
+   Claude Desktop, in `claude_desktop_config.json` (`mcp-remote` runs on your computer and forwards to the server):
+
+   ```json
+   { "mcpServers": { "tracker": { "command": "npx", "args": ["mcp-remote", "http://<your-server>:8000/mcp",
+     "--allow-http", "--header", "Authorization:Bearer <token>"] } } }
+   ```
+
+`/mcp` is on the same port as the app, so it's exactly as reachable as the app: with the default `BIND_ADDR` and a
+LAN or Tailscale setup, nothing on the internet can reach it, and every request needs a token on top. Assistants
+that run in the cloud (claude.ai, the Claude phone app) need a public HTTPS address with OAuth sign-in, which
+this version doesn't offer.
 
 ## How reminders work
 

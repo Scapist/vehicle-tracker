@@ -7,10 +7,11 @@ from alembic.config import Config
 from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.routing import Route
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app import auth
-from app.api import costs, records, reports, rules, tires, vehicles
+from app import auth, mcp_server
+from app.api import costs, records, reports, rules, tires, tokens, vehicles
 from app.config import settings
 from app.feed import status as feed_status
 from app.security import BodySizeLimit, RedactingFormatter, guard
@@ -18,6 +19,10 @@ from app.security import BodySizeLimit, RedactingFormatter, guard
 logging.basicConfig(level=logging.INFO)
 for _h in logging.getLogger().handlers:
     _h.setFormatter(RedactingFormatter("%(levelname)s:%(name)s:%(message)s"))
+for _name in ("uvicorn.access", "uvicorn.error"):
+    # uvicorn's loggers have handlers of their own; access lines can carry one-time upload links
+    for _h in logging.getLogger(_name).handlers:
+        _h.setFormatter(RedactingFormatter(getattr(_h.formatter, "_fmt", None) or "%(message)s"))
 # httpx logs full request URLs, which include the Telegram bot token
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
@@ -62,7 +67,7 @@ def backup_before_migrating(cfg: Config) -> Path | None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from app import scheduler
-    from app.bot import runner
+    from app.bot import discord_runner, runner
     from app.db import SessionLocal
     from app.seed import seed_service_types
 
@@ -71,11 +76,12 @@ async def lifespan(app: FastAPI):
         seed_service_types(db)
         auth.announce_setup(db)
     sched = scheduler.start()
-    bot = runner.start()
-    yield
+    bots = [b for b in (runner.start(), discord_runner.start()) if b]
+    async with mcp_server.running():
+        yield
     sched.shutdown(wait=False)
-    if bot:
-        bot.stop()
+    for b in bots:
+        b.stop()
 
 
 app = FastAPI(title="Vehicle Tracker", lifespan=lifespan)
@@ -87,9 +93,12 @@ app.add_middleware(BodySizeLimit)  # outermost: counts streamed bytes before any
 
 api = APIRouter(prefix="/api/v1")
 for r in (auth.router, vehicles.router, records.router, rules.router, tires.router, costs.router, reports.router,
-          feed_status.router):
+          feed_status.router, tokens.router):
     api.include_router(r)
 app.include_router(api)
+# MCP for AI assistants (404 unless MCP_ENABLED); its own bearer-token check, not the session cookie
+app.router.routes.append(Route("/mcp", endpoint=mcp_server.mcp_endpoint, methods=["GET", "POST", "DELETE"]))
+app.include_router(mcp_server.upload_router)
 
 
 @app.get("/healthz")

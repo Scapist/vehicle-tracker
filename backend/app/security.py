@@ -11,7 +11,8 @@ from app.config import settings
 
 MAX_BODY = 25 * 1024 * 1024  # a few receipts per request; single files are capped at 20 MB
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
-_TOKEN = re.compile(r"bot\d+:[\w-]+|\d{6,}:[A-Za-z0-9_-]{30,}")
+# Telegram bot tokens, Discord bot tokens (three dot-separated base64 parts) and our own MCP tokens
+_TOKEN = re.compile(r"bot\d+:[\w-]+|\d{6,}:[A-Za-z0-9_-]{30,}|[\w-]{23,28}\.[\w-]{6,7}\.[\w-]{27,40}|v[tu]_[\w-]{20,}")
 
 
 def needs_login(path: str) -> bool:
@@ -104,7 +105,7 @@ class BodySizeLimit:
 
 
 class RedactingFormatter(logging.Formatter):
-    """Strips anything that looks like a Telegram bot token from log lines, tracebacks included."""
+    """Strips anything that looks like a bot token or access token from log lines, tracebacks included."""
 
     def format(self, record: logging.LogRecord) -> str:
         return _TOKEN.sub("<redacted>", super().format(record))

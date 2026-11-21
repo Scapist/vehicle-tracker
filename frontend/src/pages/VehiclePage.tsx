@@ -122,11 +122,11 @@ function NudgeSetting({ vehicle }: { vehicle: Vehicle }) {
     <Card withBorder padding="sm">
       <Group justify="space-between" align="flex-end" wrap="wrap" gap="xs">
         <div style={{ flex: "1 1 240px" }}>
-          <Text fw={600} size="sm">Ask me for the km on Telegram</Text>
+          <Text fw={600} size="sm">Ask me for the km in chat</Text>
           <Text size="xs" c="dimmed">
-            {user.telegram_linked
+            {(user.telegram_linked || user.discord_linked)
               ? "When there's been no new reading for this long. Km reminders are only as accurate as the latest reading."
-              : "Connect Telegram in Settings first: that's where the question is sent."}
+              : "Connect Telegram or Discord in Settings → Chat apps first: that's where the question is sent."}
           </Text>
         </div>
         <Select aria-label="Ask me for the km" w={160} allowDeselect={false} data={data} value={value}

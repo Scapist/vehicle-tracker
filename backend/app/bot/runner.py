@@ -5,7 +5,6 @@ chat to an account, and every other message is answered only for a linked chat, 
 import asyncio
 import logging
 import threading
-import time
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
@@ -16,9 +15,7 @@ from app.db import SessionLocal
 from app.services.records import MAX_UPLOAD
 
 log = logging.getLogger("bot")
-LINK_ATTEMPTS = 5
-LINK_WINDOW = 10 * 60
-_link_attempts: dict[int, list[float]] = {}
+LINK_ATTEMPTS, LINK_WINDOW, link_allowed = logic.LINK_ATTEMPTS, logic.LINK_WINDOW, logic.link_allowed
 
 
 def _markup(reply: logic.Reply) -> InlineKeyboardMarkup | None:
@@ -29,15 +26,6 @@ def _markup(reply: logic.Reply) -> InlineKeyboardMarkup | None:
 
 async def _send(update: Update, reply: logic.Reply) -> None:
     await update.effective_message.reply_text(reply.text, reply_markup=_markup(reply))
-
-
-def link_allowed(chat_id: int, now: float | None = None) -> bool:
-    """At most LINK_ATTEMPTS /link tries per chat per window, so codes can't be guessed."""
-    now = now or time.time()
-    recent = [t for t in _link_attempts.get(chat_id, []) if now - t < LINK_WINDOW]
-    recent.append(now)
-    _link_attempts[chat_id] = recent
-    return len(recent) <= LINK_ATTEMPTS
 
 
 def build_application(token: str) -> Application:
@@ -80,7 +68,7 @@ def build_application(token: str) -> Application:
     async def on_link(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         chat_id = update.effective_chat.id
         if not ctx.args:
-            await _send(update, logic.Reply("Send /link followed by the code from the app's Settings → Telegram."))
+            await _send(update, logic.Reply("Send /link followed by the code from the app's Settings → Chat apps."))
             return
         if not link_allowed(chat_id):
             await _send(update, logic.Reply("Too many tries. Wait a few minutes and get a fresh code."))
@@ -138,7 +126,7 @@ class BotThread(threading.Thread):
 
 
 def start() -> BotThread | None:
-    if settings.notifier != "telegram" or not settings.telegram_bot_token:
+    if not settings.live_notifications or not settings.telegram_bot_token:
         log.info("Telegram bot disabled (NOTIFIER=%s)", settings.notifier)
         return None
     t = BotThread(settings.telegram_bot_token)

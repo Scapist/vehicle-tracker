@@ -152,29 +152,52 @@ recorded last time (`AlertState`).
 - Deciding and sending are separate, so a Telegram outage doesn't lose the alert. The row stays pending and is
   retried with growing delays.
 - `dedupe_key` is unique, so the same alert can't be queued twice even if two evaluations race.
-- The recipient is stored as `user:5`, not a chat ID, and resolved when sending (`resolve_recipient`). If you
-  relink Telegram, queued alerts follow you. If you haven't linked yet, alerts wait (up to 7 days) instead of
+- The recipient is stored as `user:5`, not a chat ID, and resolved when sending (`resolve_recipient`) into
+  `telegram:<chat>` or `discord:<user>`, using the app you picked under *Send alerts to* (or the first one
+  linked). If you relink, or switch apps, queued alerts follow you. If you haven't linked yet, alerts wait (up to 7 days) instead of
   being dropped.
 
-**Send: `app/notify/base.py`.** `Notifier` is a protocol (an interface) with two implementations:
-`TelegramNotifier`, and `LogNotifier`, which just logs and is used in development and tests.
+**Send: `app/notify/base.py`.** `Notifier` is a protocol (an interface). `TelegramNotifier` and
+`DiscordNotifier` (Discord's REST API: open a DM, then post the message with buttons) each send to one app;
+`RoutingNotifier` picks between them by the recipient's prefix; `LogNotifier` just logs and is used in
+development and tests. Adding another chat app means one more class here and one more bot runner.
 **`app/notify/` never imports vehicle code**, so it can be reused by other tools. The evaluator knows about
 vehicles; the notify package only knows "send this text to this address".
 
-## 6. The Telegram bot
+## 6. The chat bots (Telegram and Discord)
 
-The same pure → logic → glue layering:
+The same pure → logic → glue layering, with **one logic layer for both apps**:
 
 | File | Role | Needs Telegram to test? |
 |---|---|---|
 | `bot/parser.py` | Text → number (`84,500 km`, `84.5k`); guesses which vehicle. Pure. | No |
 | `bot/logic.py` | "Given this user and this message, what happens and what's the reply?" Returns a `Reply(text, buttons)`. | No, just a test database |
 | `bot/runner.py` | python-telegram-bot glue: receives updates, finds the user by chat ID, calls `logic`, sends the reply. | Kept too thin to need it |
+| `bot/discord_runner.py` | discord.py glue: DMs only, `!link`, `!due`; buttons become Discord buttons with the same callback strings. `reply_for_message` holds the routing without Discord objects, so it's tested directly. | No |
 
 The network is pushed to a thin edge, so the bot tests never talk to Telegram.
 
 Button presses carry raw IDs (`done:rule:12`), and anyone can craft one. So `logic.py` re-checks ownership on
 **every** callback. Never trust data just because your own code produced it earlier.
+
+## 6b. The MCP server (`app/mcp_server.py`)
+
+MCP (Model Context Protocol) lets an AI assistant such as Claude call *tools*: here `list_vehicles`,
+`whats_due`, `service_history`, `spending`, `log_odometer`, `log_service`, `attach_receipt` and
+`receipt_upload_link`. It's off unless `MCP_ENABLED=true`.
+
+- **Same rules as the app.** Each tool is a plain function `(db, user, ...)` that calls the same services and
+  ownership checks the API uses; the `@mcp.tool` wrappers only find the user and open a session. So the tests
+  call the plain functions, and the assistant can't do anything the app wouldn't let you do.
+- **Auth is a bearer token**, not the session cookie: an assistant isn't a browser. Tokens are made in
+  Settings, shown once and stored only as a sha256 hash (`api_token` table), so a stolen database doesn't leak
+  them. Wrong tokens are rate-limited like passwords. `MCP_USERS=owner` (default) keeps it to the owner.
+- **How the user gets to the tool.** The `/mcp` endpoint checks the token and puts the user id in the request
+  scope; the tool reads it back from its `Context`. (A Python `contextvar` wouldn't work: the MCP library runs
+  each call in a background task that doesn't inherit it.)
+- **No edits or deletes** on purpose: a misunderstood sentence should never cost you history.
+- An assistant usually can't hand over a photo's bytes, so `receipt_upload_link` returns a one-time, 15-minute
+  link to a tiny upload page instead.
 
 ## 7. Accounts and security
 

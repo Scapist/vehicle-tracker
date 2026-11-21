@@ -1,7 +1,9 @@
-"""Bot behaviour as plain functions: text in, Reply out. Telegram glue lives in runner.py.
+"""Bot behaviour as plain functions: text in, Reply out. The same for every chat app; the Telegram glue lives
+in runner.py and the Discord glue in discord_runner.py.
 
-Every function acts for one account (`user`, found from the Telegram chat) and only ever touches that
+Every function acts for one account (`user`, found from the chat) and only ever touches that
 account's vehicles. Button data carries raw ids, so each callback re-checks ownership before acting."""
+import time
 from dataclasses import dataclass, field
 from datetime import timedelta
 
@@ -18,6 +20,20 @@ from app.services import evaluator_hook, odometer, records, status
 
 BIG_JUMP_KM = 5000
 RECENT_VISIT_DAYS = 7
+LINK_ATTEMPTS = 5
+LINK_WINDOW = 10 * 60
+_link_attempts: dict[str, list[float]] = {}
+LABELS = {"telegram": "Telegram", "discord": "Discord"}
+
+
+def link_allowed(chat_id: int | str, now: float | None = None) -> bool:
+    """At most LINK_ATTEMPTS link tries per chat per window, so codes can't be guessed."""
+    now = now or time.time()
+    key = str(chat_id)
+    recent = [t for t in _link_attempts.get(key, []) if now - t < LINK_WINDOW]
+    recent.append(now)
+    _link_attempts[key] = recent
+    return len(recent) <= LINK_ATTEMPTS
 
 
 @dataclass
@@ -41,7 +57,7 @@ def _picker(db: Session, user: m.User, km: int, exclude: int | None = None) -> l
     return [(v.nickname, f"km:{v.id}:{km}") for v in _vehicles(db, user) if v.id != exclude]
 
 
-def handle_text(db: Session, user: m.User, text: str) -> Reply:
+def handle_text(db: Session, user: m.User, text: str, channel: str = "telegram") -> Reply:
     vehicles = _vehicles(db, user)
     if not vehicles:
         return Reply("No vehicles yet. Add one in the app first.")
@@ -54,10 +70,11 @@ def handle_text(db: Session, user: m.User, text: str) -> Reply:
         vid = guess_vehicle(p.km, [(v.id, odometer.current_km(db, v.id)) for v in vehicles])
     if vid is None:
         return Reply(f"Which vehicle is {p.km:,} km?", _picker(db, user, p.km))
-    return log_km(db, user, vid, p.km, confirmed=False)
+    return log_km(db, user, vid, p.km, confirmed=False, source=channel)
 
 
-def log_km(db: Session, user: m.User, vid: int, km: int, confirmed: bool, correction: bool = False) -> Reply:
+def log_km(db: Session, user: m.User, vid: int, km: int, confirmed: bool, correction: bool = False,
+           source: str = "telegram") -> Reply:
     v = _vehicle(db, user, vid)
     if not v:
         return GONE
@@ -69,7 +86,7 @@ def log_km(db: Session, user: m.User, vid: int, km: int, confirmed: bool, correc
         return Reply(f"That's +{km - cur:,} km since {v.nickname}'s last reading ({cur:,} km). Log it?",
                      [("Yes, log it", f"ok:{vid}:{km}"), ("Cancel", "cancel")])
     try:
-        r = odometer.add_reading(db, vid, km, "telegram", is_correction=correction)
+        r = odometer.add_reading(db, vid, km, source, is_correction=correction)
     except odometer.OdometerError as e:
         return Reply(str(e))
     evaluator_hook.after_change(db, user.id)
@@ -82,7 +99,7 @@ def log_km(db: Session, user: m.User, vid: int, km: int, confirmed: bool, correc
     return Reply(text, [("Wrong vehicle", f"wrong:{r.id}")])
 
 
-def handle_callback(db: Session, user: m.User, data: str) -> Reply:
+def handle_callback(db: Session, user: m.User, data: str, channel: str = "telegram") -> Reply:
     parts = data.split(":")
     kind = parts[0]
     try:
@@ -91,7 +108,7 @@ def handle_callback(db: Session, user: m.User, data: str) -> Reply:
         if kind in ("km", "ok", "corr"):
             vid, km = int(parts[1]), int(parts[2])
             # a vehicle picked from the "which vehicle?" list still gets the big-jump check
-            return log_km(db, user, vid, km, confirmed=kind == "ok", correction=kind == "corr")
+            return log_km(db, user, vid, km, confirmed=kind == "ok", correction=kind == "corr", source=channel)
         if kind == "wrong":
             r = db.get(m.OdometerReading, int(parts[1]))
             if not r or not _vehicle(db, user, r.vehicle_id):
@@ -159,7 +176,7 @@ def handle_callback(db: Session, user: m.User, data: str) -> Reply:
     return Reply("I didn't understand that button.")
 
 
-def handle_attachment(db: Session, user: m.User, filename: str, data: bytes) -> Reply:
+def handle_attachment(db: Session, user: m.User, filename: str, data: bytes, channel: str = "telegram") -> Reply:
     if records.sniff_mime(data) is None:
         return Reply("I can only file JPEG, PNG, WebP, HEIC or PDF receipts.")
     if len(data) > records.MAX_UPLOAD:
@@ -179,7 +196,7 @@ def handle_attachment(db: Session, user: m.User, filename: str, data: bytes) -> 
         return Reply(f"Attached to {v.nickname}'s service on {recent.date:%b} {recent.date.day}.")
     vid = max(vehicles, key=lambda v: odometer.valid_readings(db, v.id)[-1].recorded_at.timestamp()
               if odometer.valid_readings(db, v.id) else 0).id
-    rec = records.log_service(db, vid, today, None, 0, None, "Receipt only (from Telegram)", [], commit=False)
+    rec = records.log_service(db, vid, today, None, 0, None, f"Receipt only (from {LABELS.get(channel, channel)})", [], commit=False)
     records.save_attachment(db, rec, filename, data)
     db.commit()
     v = db.get(m.Vehicle, vid)
@@ -208,22 +225,33 @@ HELP = ("Send your odometer reading, e.g. `84500`, `84,500 km`, `84.5k` or `civi
         "Send a photo or PDF to file a receipt.\n"
         "/due: what needs attention\n/vehicles: current mileage")
 
-NOT_LINKED = ("This chat isn't linked to an account yet. In the app, open Settings → Telegram → "
-              "Connect, then send the /link command it shows you here.")
+NOT_LINKED = ("This chat isn't linked to an account yet. In the app, open Settings → Chat apps → "
+              "Connect, then send the link command it shows you here.")
 
 
 def cmd_help(db: Session, user: m.User) -> Reply:
     return Reply(HELP)
 
 
-def cmd_link(db: Session, chat_id: int, code: str) -> Reply:
+def cmd_link(db: Session, chat_id: int, code: str, channel: str = "telegram") -> Reply:
     from app.auth import consume_link_code
 
-    user = consume_link_code(db, code, chat_id)
+    user = consume_link_code(db, code, chat_id, channel)
     if not user:
-        return Reply("That code is wrong or expired. Get a new one in the app under Settings → Telegram.")
-    return Reply(f"Linked to {user.name}'s account. Alerts for your vehicles will come here.\n\n{HELP}")
+        return Reply("That code is wrong or expired. Get a new one in the app under Settings → Chat apps.")
+    return Reply(f"Linked to {user.name}'s account. You can log your km here.\n\n{help_text(channel)}")
+
+
+def help_text(channel: str = "telegram") -> str:
+    if channel == "discord":
+        return HELP.replace("`", "").replace("/due", "!due").replace("/vehicles", "!vehicles")
+    return HELP
+
+
+def user_for(db: Session, channel: str, address: int) -> m.User | None:
+    column = m.User.discord_user_id if channel == "discord" else m.User.telegram_chat_id
+    return db.scalar(select(m.User).where(column == address))
 
 
 def user_for_chat(db: Session, chat_id: int) -> m.User | None:
-    return db.scalar(select(m.User).where(m.User.telegram_chat_id == chat_id))
+    return user_for(db, "telegram", chat_id)

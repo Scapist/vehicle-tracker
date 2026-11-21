@@ -6,7 +6,7 @@ from app.clock import tz
 from app.db import SessionLocal
 from app.evaluator import evaluate, resolve_recipient
 from app.nudge import queue_nudges
-from app.notify.base import TelegramNotifier
+from app.notify.base import LogNotifier
 from app.notify.factory import get_notifier
 from app.notify.outbox import dispatch
 
@@ -30,10 +30,10 @@ def run_nudges() -> None:
 def run_dispatch() -> None:
     with SessionLocal() as db:
         notifier = get_notifier()
-        if isinstance(notifier, TelegramNotifier):
-            dispatch(db, notifier, resolve=lambda r: resolve_recipient(db, r))
-        else:
+        if isinstance(notifier, LogNotifier):
             dispatch(db, notifier)  # log mode: write everything to the log
+        else:
+            dispatch(db, notifier, resolve=lambda r: resolve_recipient(db, r))
 
 
 def start() -> BackgroundScheduler:

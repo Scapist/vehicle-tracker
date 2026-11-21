@@ -15,11 +15,13 @@ MAX_TOTAL_ATTEMPTS = 60  # after the quick ones, retry with a growing delay for 
 HOLD_LIMIT = timedelta(days=7)  # how long a message waits for an address before it is dropped
 BACKOFF_STEP = timedelta(minutes=10)
 _SECRET = re.compile(r"bot\d+:[\w-]+")
+_DISCORD = re.compile(r"[\w-]{23,28}\.[\w-]{6,7}\.[\w-]{27,40}")
 
 
 def redact(text: str) -> str:
-    """Telegram puts the bot token in request URLs, which end up in exception messages."""
-    return _SECRET.sub("bot<redacted>", text)
+    """Telegram puts the bot token in request URLs, which end up in exception messages; a Discord token
+    could appear in an echoed header."""
+    return _DISCORD.sub("<redacted>", _SECRET.sub("bot<redacted>", text))
 
 
 def _eligible(row: NotificationOutbox, now: datetime) -> bool:

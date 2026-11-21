@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app import models as m
 from app.clock import as_local_date, today_local
 from app.domain.status import fmt_date
+from app.evaluator import alert_address
 from app.notify.base import Action
 from app.notify.outbox import enqueue
 from app.services import odometer
@@ -23,15 +24,15 @@ def nudge_round(last: date, today: date, every_days: int) -> int | None:
 
 
 def queue_nudges(db: Session, today: date | None = None) -> int:
-    """Queue one Telegram question per quiet vehicle. Returns how many were queued."""
+    """Queue one chat question per quiet vehicle. Returns how many were queued."""
     today = today or today_local()
     queued = 0
     vehicles = db.scalars(select(m.Vehicle).where(m.Vehicle.archived.is_(False), m.Vehicle.user_id.is_not(None),
                                                   m.Vehicle.nudge_days > 0))
     for v in vehicles:
         owner = db.get(m.User, v.user_id)
-        if not owner or not owner.telegram_chat_id:
-            continue  # it's a Telegram question; without a linked chat there's nowhere to ask
+        if not owner or not alert_address(owner):
+            continue  # it's a chat question; without a linked chat app there's nowhere to ask
         has_km_rule = db.scalar(select(m.ReminderRule.id).where(
             m.ReminderRule.vehicle_id == v.id, m.ReminderRule.enabled.is_(True),
             m.ReminderRule.interval_km.is_not(None)).limit(1))

@@ -36,7 +36,8 @@ def test_setup_needs_code_creates_owner_and_claims_existing_data(anon, db, monke
     db.add_all([old, m.DateItem(kind="custom", title="Old", due_date=TODAY)])
     db.commit()
     monkeypatch.setattr(settings, "telegram_allowed_chat_ids", "5550001234")
-    assert anon.get("/api/v1/auth/me").json() == {"user": None, "setup_required": True}
+    me = anon.get("/api/v1/auth/me").json()
+    assert me["user"] is None and me["setup_required"] is True
     code = auth.ensure_setup_code()
 
     bad = anon.post("/api/v1/auth/setup", json=new_account(setup_code="WRONG123"))
@@ -96,8 +97,10 @@ def test_tampered_and_expired_sessions_rejected(anon, user):
     good = anon.cookies.get(auth.COOKIE)
     uid, ver, exp, sig = good.split(".")
     for forged in (f"{int(uid) + 1}.{ver}.{exp}.{sig}", f"{uid}.{ver}.{int(exp) + 999}.{sig}", "garbage"):
+        anon.cookies.clear()
         anon.cookies.set(auth.COOKIE, forged)
         assert anon.get("/api/v1/vehicles").status_code == 401, forged
+    anon.cookies.clear()
     anon.cookies.set(auth.COOKIE, good)
     assert anon.get("/api/v1/vehicles").status_code == 200
     with time_machine.travel(NOW + dt.timedelta(days=31), tick=False):
@@ -129,7 +132,8 @@ def test_data_endpoints_need_a_session(anon, user):
                  "/api/v1/service-types", "/docs", "/openapi.json", "/api/v1/auth/invites"):
         assert anon.get(path).status_code == 401, path
     assert anon.get("/healthz").status_code == 200
-    assert anon.get("/api/v1/auth/me").json() == {"user": None, "setup_required": False}
+    me = anon.get("/api/v1/auth/me").json()
+    assert me["user"] is None and me["setup_required"] is False
 
 
 # ---------- invites ----------
@@ -270,7 +274,7 @@ def test_telegram_link_code_flow(db, user):
 
 
 def test_link_attempts_are_rate_limited():
-    runner._link_attempts.clear()
+    logic._link_attempts.clear()
     assert all(runner.link_allowed(42, now=1000 + i) for i in range(runner.LINK_ATTEMPTS))
     assert not runner.link_allowed(42, now=1010)
     assert runner.link_allowed(42, now=1000 + runner.LINK_WINDOW + 20)
@@ -288,7 +292,7 @@ def test_alerts_go_to_each_owners_chat_only(demo, user):
     assert mine and all(r.recipient == f"user:{user.id}" for r in mine)
     assert sams and all(r.recipient == f"user:{sam.id}" for r in sams)
     # the chat is looked up when sending: mine resolves, Sam's (not linked) is held
-    assert resolve_recipient(demo, f"user:{user.id}") == str(CHAT_ID)
+    assert resolve_recipient(demo, f"user:{user.id}") == f"telegram:{CHAT_ID}"
     assert resolve_recipient(demo, f"user:{sam.id}") is None
 
     sent = []
@@ -301,5 +305,6 @@ def test_alerts_go_to_each_owners_chat_only(demo, user):
     tg = TelegramNotifier("1:x", client=FakeClient())
     with pytest.raises(ValueError):
         tg.send("t", "b", recipient=None)  # never a silent "success"
-    tg.send("t", "b", recipient=str(CHAT_ID))
-    assert sent == [CHAT_ID]  # no default chat: never someone else's
+    tg.send("t", "b", recipient=f"telegram:{CHAT_ID}")
+    tg.send("t", "b", recipient=str(CHAT_ID))  # rows queued before chat apps had a prefix
+    assert sent == [CHAT_ID, CHAT_ID]  # no default chat: never someone else's

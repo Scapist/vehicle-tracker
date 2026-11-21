@@ -178,6 +178,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/link-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Link Code
+         * @description One code for any chat app: whichever bot receives it links that app.
+         */
+        post: operations["link_code_api_v1_auth_link_code_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/telegram/link-code": {
         parameters: {
             query?: never;
@@ -207,6 +227,40 @@ export interface paths {
         post?: never;
         /** Telegram Unlink */
         delete: operations["telegram_unlink_api_v1_auth_telegram_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/discord": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Discord Unlink */
+        delete: operations["discord_unlink_api_v1_auth_discord_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/alert-channel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Alert Channel */
+        put: operations["set_alert_channel_api_v1_auth_alert_channel_put"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -817,6 +871,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mcp-tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Tokens */
+        get: operations["list_tokens_api_v1_mcp_tokens_get"];
+        put?: never;
+        /** Create Token */
+        post: operations["create_token_api_v1_mcp_tokens_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mcp-tokens/{token_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke Token */
+        delete: operations["revoke_token_api_v1_mcp_tokens__token_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -838,6 +927,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AlertChannelIn */
+        AlertChannelIn: {
+            /** Channel */
+            channel?: string | null;
+        };
         /** AttachmentOut */
         AttachmentOut: {
             /** Id */
@@ -1046,6 +1140,16 @@ export interface components {
             user: components["schemas"]["UserOut"] | null;
             /** Setup Required */
             setup_required: boolean;
+            /**
+             * Channels Available
+             * @default []
+             */
+            channels_available: string[];
+            /**
+             * Mcp Enabled
+             * @default false
+             */
+            mcp_enabled: boolean;
         };
         /** MountIn */
         MountIn: {
@@ -1517,6 +1621,27 @@ export interface components {
             /** Depth Mm */
             depth_mm: number;
         };
+        /** TokenIn */
+        TokenIn: {
+            /** Name */
+            name: string;
+        };
+        /** TokenOut */
+        TokenOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Last Used At */
+            last_used_at: string | null;
+            /** Token */
+            token?: string | null;
+        };
         /** UserOut */
         UserOut: {
             /** Id */
@@ -1529,6 +1654,13 @@ export interface components {
             is_owner: boolean;
             /** Telegram Linked */
             telegram_linked: boolean;
+            /**
+             * Discord Linked
+             * @default false
+             */
+            discord_linked: boolean;
+            /** Alert Channel */
+            alert_channel?: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -1901,6 +2033,26 @@ export interface operations {
             };
         };
     };
+    link_code_api_v1_auth_link_code_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkCode"];
+                };
+            };
+        };
+    };
     telegram_link_code_api_v1_auth_telegram_link_code_post: {
         parameters: {
             query?: never;
@@ -1936,6 +2088,57 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    discord_unlink_api_v1_auth_discord_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_alert_channel_api_v1_auth_alert_channel_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertChannelIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -3434,6 +3637,88 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FeedItem"][];
+                };
+            };
+        };
+    };
+    list_tokens_api_v1_mcp_tokens_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenOut"][];
+                };
+            };
+        };
+    };
+    create_token_api_v1_mcp_tokens_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TokenIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_token_api_v1_mcp_tokens__token_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

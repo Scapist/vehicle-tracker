@@ -46,7 +46,7 @@ def test_alert_waits_for_telegram_link_then_delivers(demo, user):
     user.telegram_chat_id = 777
     demo.commit()
     assert tg_dispatch(demo, n) == len(outbox(demo)) > 0
-    assert set(n.recipients) == {"777"}
+    assert set(n.recipients) == {"telegram:777"}
 
 
 def test_held_alert_is_dropped_after_hold_limit(demo, user):
@@ -79,7 +79,7 @@ def test_queued_alert_follows_relink_and_respects_disconnect(demo, user):
     demo.commit()
     n = Recorder()
     tg_dispatch(demo, n)
-    assert set(n.recipients) == {"333"} and str(CHAT_ID) not in n.recipients
+    assert set(n.recipients) == {"telegram:333"}
 
 
 def test_disconnected_user_gets_nothing(demo, user):

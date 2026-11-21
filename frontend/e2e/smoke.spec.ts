@@ -202,6 +202,39 @@ test("mileage nudge can be set per vehicle", async ({ page }) => {
   }
 });
 
+test("chat apps: Discord shows its own link command next to Telegram", async ({ page }) => {
+  await page.goto("/settings");
+  await expect(page.getByText("Chat apps", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Connect Discord" }).click();
+  await expect(page.getByText(/^!link [A-Z0-9]{8}$/)).toBeVisible();
+  await expect(page.getByText("as a direct message", { exact: false })).toBeVisible();
+});
+
+test("AI assistants: create a token, see the setup, revoke it", async ({ page }) => {
+  await page.goto("/settings");
+  const name = `E2E ${Date.now()}`;
+  await page.getByLabel("New token for").fill(name);
+  await page.getByRole("button", { name: "Create token" }).click();
+  const token = (await page.getByTestId("new-token").textContent()) ?? "";
+  expect(token).toMatch(/^vt_/);
+  await expect(page.getByText(`Bearer ${token}`, { exact: false }).first()).toBeVisible();
+  // the token works against /mcp; a wrong one doesn't
+  const call = (t: string) => page.request.post("/mcp", {
+    headers: { Authorization: `Bearer ${t}`, Accept: "application/json, text/event-stream",
+      "mcp-protocol-version": "2025-06-18" },
+    data: { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "list_vehicles", arguments: {} } },
+  });
+  expect((await call("vt_nope")).status()).toBe(401);
+  const ok = await call(token);
+  expect(ok.status()).toBe(200);
+  expect(JSON.stringify(await ok.json())).toContain("Civic");
+  const row = page.locator("div").filter({ has: page.getByText(name, { exact: true }) })
+    .filter({ has: page.getByRole("button", { name: "Revoke" }) }).last();
+  await row.getByRole("button", { name: "Revoke" }).click();
+  await expect(page.getByText(name, { exact: true })).toHaveCount(0);
+  expect((await call(token)).status()).toBe(401);
+});
+
 for (const scheme of ["light", "dark"] as const) {
   test(`screenshots (${scheme})`, async ({ page }, info) => {
     await page.emulateMedia({ colorScheme: scheme });
@@ -229,7 +262,7 @@ for (const scheme of ["light", "dark"] as const) {
     await page.getByRole("tab", { name: "Odometer", exact: true }).click(); await snap("vehicle-odometer", 1);
     await go("/tires"); await snap("tires", 2);
     await go("/reports"); await snap("reports", 2);
-    await go("/settings"); await snap("settings", 1);
+    await go("/settings"); await snap("settings", 4);
     await go("/vehicles"); await snap("vehicles", 1);
     await go("/");
     await page.getByRole("button", { name: "Quick log" }).click();

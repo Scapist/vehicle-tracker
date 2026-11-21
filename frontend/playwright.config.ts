@@ -17,7 +17,9 @@ export default defineConfig({
       "uv run alembic upgrade head && uv run python -m app.seed --demo && uv run uvicorn app.main:app --port 8123",
     cwd: "../backend",
     url: "http://127.0.0.1:8123/healthz",
-    env: { DATA_DIR, NOTIFIER: "log", DEMO_PASSWORD: E2E_PASSWORD },
+    // fake bot tokens only make the chat apps show up in Settings; NOTIFIER=log keeps the bots from starting
+    env: { DATA_DIR, NOTIFIER: "log", DEMO_PASSWORD: E2E_PASSWORD, MCP_ENABLED: "true", TELEGRAM_BOT_TOKEN: "1:e2e",
+      DISCORD_BOT_TOKEN: "e2e" },
     reuseExistingServer: false,
     timeout: 120_000,
   },

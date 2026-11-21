@@ -14,10 +14,11 @@ import type { components } from "../api/schema";
 import { setSession, useUser } from "../components/AuthGate";
 import { notifyError, notifyUndo } from "../components/status";
 import { day } from "../lib/format";
+import { AssistantsCard } from "../components/AssistantsCard";
+import { ChatAppsCard } from "../components/ChatAppsCard";
 import { AddVehicleModal } from "./Vehicles";
 
 type Invite = components["schemas"]["InviteOut"];
-type LinkCode = components["schemas"]["LinkCode"];
 
 export default function Settings() {
   const { colorScheme, setColorScheme } = useMantineColorScheme();
@@ -56,7 +57,8 @@ export default function Settings() {
         </Stack>
       </Card>
       <ServicesCard />
-      <TelegramCard />
+      <ChatAppsCard />
+      <AssistantsCard />
       {user.is_owner && <InvitesCard />}
       <AddVehicleModal opened={adding} onClose={add.close} />
     </Stack>
@@ -70,7 +72,7 @@ function AccountCard() {
   async function signOut(everywhere: boolean) {
     try {
       await api(everywhere ? "/auth/logout-everywhere" : "/auth/logout", { method: "POST" });
-      setSession(qc, { user: null, setup_required: false });
+      setSession(qc, { user: null, setup_required: false, channels_available: [], mcp_enabled: false });
     } catch (e) {
       notifyError(e);
     }
@@ -139,69 +141,6 @@ function ChangePassword({ opened, onClose }: { opened: boolean; onClose: () => v
         </Button>
       </Stack>
     </Modal>
-  );
-}
-
-function TelegramCard() {
-  const user = useUser();
-  const qc = useQueryClient();
-  const [link, setLink] = useState<LinkCode | null>(null);
-  async function connect() {
-    try {
-      setLink(await api<LinkCode>("/auth/telegram/link-code", { method: "POST" }));
-    } catch (e) {
-      notifyError(e);
-    }
-  }
-  async function disconnect() {
-    try {
-      await api("/auth/telegram", { method: "DELETE" });
-      await qc.invalidateQueries({ queryKey: ["auth-me"] });
-    } catch (e) {
-      notifyError(e);
-    }
-  }
-  return (
-    <Card withBorder>
-      <Stack gap="sm">
-        <Group justify="space-between">
-          <Group gap="xs">
-            <IconBrandTelegram size={18} />
-            <Text fw={600}>Telegram</Text>
-            {user.telegram_linked
-              ? <Badge color="green" variant="light" size="sm">Connected</Badge>
-              : <Badge color="gray" variant="light" size="sm">Not connected</Badge>}
-          </Group>
-          {user.telegram_linked
-            ? <Button size="compact-sm" variant="subtle" color="red" onClick={disconnect}>Disconnect</Button>
-            : <Button size="compact-sm" onClick={connect}>Connect</Button>}
-        </Group>
-        <Text size="sm" c="dimmed">
-          Get alerts for your vehicles and log mileage by texting the bot.
-          {user.telegram_linked && " To connect a different chat, disconnect first."}
-        </Text>
-        {link && !user.telegram_linked && (
-          <Stack gap={6}>
-            <Text size="sm">Send this to the bot in Telegram (valid for 10 minutes):</Text>
-            <Group gap="xs">
-              <Code fz="md">/link {link.code}</Code>
-              <CopyButton value={`/link ${link.code}`}>
-                {({ copied, copy }) => (
-                  <Button size="compact-sm" variant="light" onClick={copy}
-                    leftSection={copied ? <IconCheck size={14} /> : <IconCopy size={14} />}>
-                    {copied ? "Copied" : "Copy"}
-                  </Button>
-                )}
-              </CopyButton>
-            </Group>
-            <Button size="compact-sm" variant="subtle" w="fit-content"
-              onClick={() => qc.invalidateQueries({ queryKey: ["auth-me"] })}>
-              I've sent it
-            </Button>
-          </Stack>
-        )}
-      </Stack>
-    </Card>
   );
 }
 

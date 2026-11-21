@@ -1,4 +1,4 @@
-"""Accounts: first-run setup with a one-time code, invite-only sign-up, login, sessions, Telegram linking."""
+"""Accounts: first-run setup with a one-time code, invite-only sign-up, login, sessions, chat app linking."""
 import base64
 import hashlib
 import hmac
@@ -30,7 +30,7 @@ FREE_ATTEMPTS_PER_DEVICE = 20  # across all emails from one device (password spr
 MAX_LOCK = 15 * 60
 _CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O/1/I
 
-# in-process state (single container): failed logins, the first-run setup code, Telegram link codes
+# in-process state (single container): failed logins, the first-run setup code, chat link codes
 _failures: dict[str, tuple[int, float]] = {}
 _setup_code: str | None = None
 _link_codes: dict[str, tuple[int, float]] = {}  # code -> (user id, expires)
@@ -183,7 +183,7 @@ def _check_lock(*keys: str) -> None:
 
 def _fail(*keys: str) -> None:
     for k in keys:
-        free = FREE_ATTEMPTS_PER_DEVICE if k.startswith("ip:") else FREE_ATTEMPTS
+        free = FREE_ATTEMPTS_PER_DEVICE if k.startswith(("ip:", "mcp:")) else FREE_ATTEMPTS
         count = _failures.get(k, (0, 0.0))[0] + 1
         until = time.time() + min(MAX_LOCK, 30 * 2 ** (count - free)) if count >= free else 0.0
         _failures[k] = (count, until)
@@ -244,16 +244,28 @@ class UserOut(BaseModel):
     email: str
     is_owner: bool
     telegram_linked: bool
+    discord_linked: bool = False
+    alert_channel: str | None = None
 
 
 class Me(BaseModel):
     user: UserOut | None
     setup_required: bool
+    channels_available: list[str] = []  # chat apps set up on this server
+    mcp_enabled: bool = False
 
 
 def _user_out(u: m.User) -> UserOut:
     return UserOut(id=u.id, name=u.name, email=u.email, is_owner=u.is_owner,
-                   telegram_linked=u.telegram_chat_id is not None)
+                   telegram_linked=u.telegram_chat_id is not None, discord_linked=u.discord_user_id is not None,
+                   alert_channel=u.alert_channel)
+
+
+def _me(user: m.User | None, setup_required: bool) -> "Me":
+    from app.notify.factory import available_channels
+
+    return Me(user=_user_out(user) if user else None, setup_required=setup_required,
+              channels_available=available_channels(), mcp_enabled=settings.mcp_enabled)
 
 
 # ---------- endpoints ----------
@@ -261,7 +273,7 @@ def _user_out(u: m.User) -> UserOut:
 @router.get("/me", response_model=Me)
 def me(request: Request, db: Session = Depends(get_db)):
     user = session_user(db, request)
-    return Me(user=_user_out(user) if user else None, setup_required=not has_users(db))
+    return _me(user, not has_users(db))
 
 
 @router.post("/setup", response_model=Me, status_code=201)
@@ -287,7 +299,7 @@ def setup(body: SetupIn, request: Request, response: Response, db: Session = Dep
     _failures.pop(client, None)
     log.info("owner account created for %s", user.email)
     _set_session(response, request, user)
-    return Me(user=_user_out(user), setup_required=False)
+    return _me(user, False)
 
 
 @router.post("/signup", response_model=Me, status_code=201)
@@ -315,7 +327,7 @@ def signup(body: SignupIn, request: Request, response: Response, db: Session = D
     db.execute(update(m.Invite).where(m.Invite.token_hash == token_hash).values(used_by=user.id))
     db.commit()
     _set_session(response, request, user)
-    return Me(user=_user_out(user), setup_required=False)
+    return _me(user, False)
 
 
 @router.post("/login", response_model=Me)
@@ -335,7 +347,7 @@ def login(body: LoginIn, request: Request, response: Response, db: Session = Dep
         raise HTTPException(401, "Wrong email or password")
     _failures.pop(keys[1], None)
     _set_session(response, request, user)
-    return Me(user=_user_out(user), setup_required=False)
+    return _me(user, False)
 
 
 @router.post("/logout", status_code=204)
@@ -414,15 +426,17 @@ def list_users(user: m.User = Depends(owner_user), db: Session = Depends(get_db)
     return [_user_out(u) for u in db.scalars(select(m.User).order_by(m.User.created_at))]
 
 
-# ---------- Telegram linking ----------
+# ---------- chat app linking (Telegram, Discord) ----------
+
+CHANNELS = {"telegram": "telegram_chat_id", "discord": "discord_user_id"}
+
 
 class LinkCode(BaseModel):
     code: str
     expires_in_seconds: int
 
 
-@router.post("/telegram/link-code", response_model=LinkCode)
-def telegram_link_code(user: m.User = Depends(current_user)):
+def _new_link_code(user: m.User) -> LinkCode:
     now = time.time()
     for c, (_, exp) in list(_link_codes.items()):
         if exp < now:
@@ -432,24 +446,65 @@ def telegram_link_code(user: m.User = Depends(current_user)):
     return LinkCode(code=code, expires_in_seconds=LINK_CODE_TTL)
 
 
-@router.delete("/telegram", status_code=204)
-def telegram_unlink(user: m.User = Depends(current_user), db: Session = Depends(get_db)):
-    user.telegram_chat_id = None
+@router.post("/link-code", response_model=LinkCode)
+def link_code(user: m.User = Depends(current_user)):
+    """One code for any chat app: whichever bot receives it links that app."""
+    return _new_link_code(user)
+
+
+@router.post("/telegram/link-code", response_model=LinkCode)
+def telegram_link_code(user: m.User = Depends(current_user)):
+    return _new_link_code(user)
+
+
+def _unlink(db: Session, user: m.User, channel: str) -> None:
+    setattr(user, CHANNELS[channel], None)
+    if user.alert_channel == channel:
+        user.alert_channel = None
     db.commit()
 
 
-def consume_link_code(db: Session, code: str, chat_id: int) -> m.User | None:
-    """Used by the bot's /link command. Returns the user the chat is now linked to."""
+@router.delete("/telegram", status_code=204)
+def telegram_unlink(user: m.User = Depends(current_user), db: Session = Depends(get_db)):
+    _unlink(db, user, "telegram")
+
+
+@router.delete("/discord", status_code=204)
+def discord_unlink(user: m.User = Depends(current_user), db: Session = Depends(get_db)):
+    _unlink(db, user, "discord")
+
+
+class AlertChannelIn(BaseModel):
+    channel: str | None = None
+
+
+@router.put("/alert-channel", response_model=UserOut)
+def set_alert_channel(body: AlertChannelIn, user: m.User = Depends(current_user), db: Session = Depends(get_db)):
+    if body.channel is not None:
+        if body.channel not in CHANNELS:
+            raise HTTPException(422, "Unknown chat app")
+        if getattr(user, CHANNELS[body.channel]) is None:
+            raise HTTPException(409, "Connect that app first")
+    user.alert_channel = body.channel
+    db.commit()
+    return _user_out(user)
+
+
+def consume_link_code(db: Session, code: str, address: int, channel: str = "telegram") -> m.User | None:
+    """Used by the bots' link command. Returns the user the chat is now linked to."""
+    column = CHANNELS[channel]
     entry = _link_codes.pop(code.strip().upper(), None)
     if not entry or entry[1] < time.time():
         return None
     user = db.get(m.User, entry[0])
     if not user:
         return None
-    other = db.scalar(select(m.User).where(m.User.telegram_chat_id == chat_id))
+    other = db.scalar(select(m.User).where(getattr(m.User, column) == address))
     if other and other.id != user.id:
-        other.telegram_chat_id = None  # a chat belongs to one account
-        db.flush()  # release the unique chat id before giving it to the new account
-    user.telegram_chat_id = chat_id
+        setattr(other, column, None)  # a chat belongs to one account
+        if other.alert_channel == channel:
+            other.alert_channel = None
+        db.flush()  # release the unique id before giving it to the new account
+    setattr(user, column, address)
     db.commit()
     return user

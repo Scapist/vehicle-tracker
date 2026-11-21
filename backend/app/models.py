@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -20,6 +20,9 @@ class User(Base):
     # bumped on password change / sign-out-everywhere; part of every session signature
     session_version: Mapped[int] = mapped_column(default=1)
     telegram_chat_id: Mapped[int | None] = mapped_column(unique=True)
+    # a unique index (not a constraint) so migration 0006 can add it with a plain ADD COLUMN
+    discord_user_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, index=True)
+    alert_channel: Mapped[str | None] = mapped_column(String(20))  # telegram | discord; None = first linked
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -200,3 +203,15 @@ class AlertState(Base):
 
 
 from app.notify.models import NotificationOutbox  # noqa: E402,F401  (re-export; table lives in the reusable notify package)
+
+
+class ApiToken(Base):
+    """A personal access token for the MCP server. Only its sha256 is stored; the token is shown once."""
+    __tablename__ = "api_token"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(80))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
