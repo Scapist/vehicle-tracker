@@ -183,14 +183,19 @@ function RemindersTab({ id }: { id: number }) {
   const patch = useApiMutation((a: { id: number; body: object }) => api(`/rules/${a.id}`, { method: "PATCH", json: a.body }));
   const addDate = useApiMutation((b: object) => api("/date-items", { method: "POST", json: b }));
 
+  const hasKind = (k: string) => !!dates.data?.some((d) => d.kind === k);
+  const hasWinter = hasKind("winter_install") && hasKind("winter_remove");
+
   async function addWinter() {
     const y = new Date().getFullYear();
     const dec = new Date(y, 11, 1) < new Date() ? y + 1 : y;
     try {
-      await addDate.mutateAsync({ vehicle_id: id, kind: "winter_install", title: "Install winter tires by Dec 1",
-        due_date: `${dec}-12-01`, recurs_yearly: true, soon_days: 30 });
-      await addDate.mutateAsync({ vehicle_id: id, kind: "winter_remove", title: "Winter tires can come off after Mar 15",
-        due_date: `${dec + 1}-03-15`, recurs_yearly: true, soon_days: 14, informational: true });
+      if (!hasKind("winter_install"))
+        await addDate.mutateAsync({ vehicle_id: id, kind: "winter_install", title: "Install winter tires by Dec 1",
+          due_date: `${dec}-12-01`, recurs_yearly: true, soon_days: 30 });
+      if (!hasKind("winter_remove"))
+        await addDate.mutateAsync({ vehicle_id: id, kind: "winter_remove", title: "Winter tires can come off after Mar 15",
+          due_date: `${dec + 1}-03-15`, recurs_yearly: true, soon_days: 14, informational: true });
     } catch (e) {
       notifyError(e);
     }
@@ -228,7 +233,11 @@ function RemindersTab({ id }: { id: number }) {
         <Group justify="space-between">
           <Title order={4}>Dates</Title>
           <Group gap="xs">
-            <Button size="compact-md" variant="default" onClick={addWinter}>Add winter-tire reminders</Button>
+            {dates.data && !hasWinter && (
+              <Button size="compact-md" variant="default" onClick={addWinter} loading={addDate.isPending}>
+                Add winter-tire reminders
+              </Button>
+            )}
             <Button size="compact-md" leftSection={<IconPlus size={14} />} onClick={dateModal.open}>Add date</Button>
           </Group>
         </Group>

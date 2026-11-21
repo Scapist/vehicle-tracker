@@ -108,6 +108,16 @@ class ServiceOut(ORM):
     type_names: list[str] = []
 
 
+class ServicePatch(BaseModel):
+    """Fields to change on a logged service; leave a field out to keep it. type_ids replaces the list."""
+    date: Date | None = None
+    odometer_km: int | None = Field(default=None, ge=0, le=2_000_000)
+    cost_cents: int | None = Field(default=None, ge=0, le=100_000_000)
+    vendor: str | None = Field(default=None, max_length=120)
+    notes: str | None = Field(default=None, max_length=5000)
+    type_ids: list[int] | None = Field(default=None, max_length=50)
+
+
 class StatusItemOut(BaseModel):
     subject: str
     kind: str

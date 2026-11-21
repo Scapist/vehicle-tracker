@@ -113,7 +113,7 @@ Press **Mark done** once it's renewed. If you pay insurance or registration mont
 **Winter-tire reminders:** vehicle → **Reminders** → **Add winter-tire reminders** adds two yearly dates:
 *Install winter tires by Dec 1* (alerts 30 days ahead) and *Winter tires can come off after Mar 15* (shown, no
 alert). These follow Quebec's rules; elsewhere, add your own dates with **Add date** instead. Marking either done
-asks which tire set is now on the car.
+asks which tire set is now on the car. Each vehicle gets them once; the button disappears after that.
 
 **Tire sets:** the **Tires** page → **Add set**: a label ("Winters"), the season (winter, summer, all-season),
 size (e.g. `215/55R17`), brand, DOT code, purchase date and cost (counted in spending) and where it's stored.
@@ -129,7 +129,8 @@ set gets close to the legal minimum.
 - **receipts**: photos (JPEG, PNG, WebP, HEIC) or PDFs up to 20 MB each.
 
 With several services in one visit you can split the cost between them; otherwise it's shared out for the
-reports. You can also send a receipt photo to the chat bot: it attaches it to a service from the last 7 days, or
+reports. To fix or remove a logged service, open it from the **Services** tab (or Reports) and use **Edit** or
+**Delete**; a single receipt file can be removed there too. You can also send a receipt photo to the chat bot: it attaches it to a service from the last 7 days, or
 saves it as a receipt-only entry you can fill in later.
 
 ## Automatic payments

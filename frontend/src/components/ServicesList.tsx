@@ -1,12 +1,22 @@
 import {
-  Anchor, Badge, Card, Drawer, Group, Image, Stack, Table, Text, TextInput, UnstyledButton,
+  Anchor, Badge, Button, Card, Drawer, Group, Image, NumberInput, Stack, Table, Text, Textarea, TextInput,
+  UnstyledButton,
 } from "@mantine/core";
+import { DateInput } from "@mantine/dates";
 import { useMediaQuery } from "@mantine/hooks";
-import { IconArrowsSort, IconPaperclip, IconSearch, IconSortAscending, IconSortDescending } from "@tabler/icons-react";
-import { useMemo, useState } from "react";
+import { notifications } from "@mantine/notifications";
+import {
+  IconArrowsSort, IconPaperclip, IconPencil, IconSearch, IconSortAscending, IconSortDescending, IconTrash,
+} from "@tabler/icons-react";
+import dayjs from "dayjs";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
+import { api } from "../api/client";
+import { useInvalidate } from "../api/hooks";
 import type { Service } from "../api/types";
-import { day, km, money } from "../lib/format";
+import { day, isoDate, km, money, toCents } from "../lib/format";
+import { ServiceTypeMultiPicker } from "./ServiceTypePicker";
+import { notifyError } from "./status";
 
 type SortKey = "date" | "odometer_km" | "cost_cents";
 
@@ -14,13 +24,127 @@ function work(s: Service) {
   return s.type_names.join(", ") || (s.notes ? s.notes : "Service");
 }
 
+function EditService({ service, onSaved, onCancel }: {
+  service: Service; onSaved: (s: Service) => void; onCancel: () => void;
+}) {
+  const [date, setDate] = useState<Date | null>(dayjs(service.date).toDate());
+  const [odo, setOdo] = useState<number | string>(service.odometer_km ?? "");
+  const [typeIds, setTypeIds] = useState<string[]>(service.items.map((i) => String(i.service_type_id)));
+  const [cost, setCost] = useState<number | string>(service.cost_cents / 100);
+  const [vendor, setVendor] = useState(service.vendor ?? "");
+  const [notes, setNotes] = useState(service.notes ?? "");
+  const [busy, setBusy] = useState(false);
+  const invalidate = useInvalidate();
+
+  async function save() {
+    setBusy(true);
+    try {
+      const out = await api<Service>(`/services/${service.id}`, {
+        method: "PATCH",
+        json: {
+          date: isoDate(date), odometer_km: odo === "" ? null : Number(odo), cost_cents: toCents(cost),
+          vendor, notes, type_ids: typeIds.map(Number),
+        },
+      });
+      await invalidate();
+      onSaved(out);
+      notifications.show({ color: "green", message: "Service updated" });
+    } catch (e) {
+      notifyError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Stack>
+      <ServiceTypeMultiPicker label="What was done?" value={typeIds} onChange={setTypeIds} />
+      <Group grow align="flex-start">
+        <DateInput label="Date" value={date} onChange={setDate} maxDate={new Date()} valueFormat="MMM D, YYYY" />
+        <NumberInput label="Odometer (km)" value={odo} onChange={setOdo} thousandSeparator="," min={0} inputMode="numeric" />
+      </Group>
+      <Group grow align="flex-start">
+        <NumberInput label="Total cost" value={cost} onChange={setCost} leftSection="$" decimalScale={2}
+          fixedDecimalScale min={0} inputMode="decimal" />
+        <TextInput label="Shop / vendor" value={vendor} onChange={(e) => setVendor(e.currentTarget.value)} />
+      </Group>
+      <Textarea label="Notes" autosize minRows={2} value={notes} onChange={(e) => setNotes(e.currentTarget.value)} />
+      <Group justify="flex-end">
+        <Button variant="default" onClick={onCancel}>Cancel</Button>
+        <Button onClick={save} loading={busy} disabled={!date}>Save changes</Button>
+      </Group>
+    </Stack>
+  );
+}
+
 export function ServiceDrawer({ service, onClose }: { service: Service | null; onClose: () => void }) {
   const mobile = useMediaQuery("(max-width: 48em)");
+  const [shown, setShown] = useState<Service | null>(service);
+  const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const invalidate = useInvalidate();
+  useEffect(() => {
+    setShown(service);
+    setEditing(false);
+    setConfirmDelete(false);
+  }, [service]);
+
+  async function remove() {
+    if (!shown) return;
+    try {
+      await api(`/services/${shown.id}`, { method: "DELETE" });
+      await invalidate();
+      notifications.show({ color: "green", message: "Service deleted" });
+      onClose();
+    } catch (e) {
+      notifyError(e);
+    }
+  }
+
+  async function removeFile(id: number) {
+    if (!shown) return;
+    try {
+      await api(`/attachments/${id}`, { method: "DELETE" });
+      setShown({ ...shown, attachments: shown.attachments.filter((a) => a.id !== id) });
+      await invalidate();
+    } catch (e) {
+      notifyError(e);
+    }
+  }
+
+  const s = shown;
   return (
     <Drawer opened={!!service} onClose={onClose} position={mobile ? "bottom" : "right"} size={mobile ? "85%" : "lg"}
-      title={service ? `${day(service.date)} · ${work(service)}` : ""}>
-      {service && (
+      title={s ? `${day(s.date)} · ${work(s)}` : ""}>
+      {s && editing && <EditService service={s} onCancel={() => setEditing(false)}
+        onSaved={(out) => { setShown(out); setEditing(false); }} />}
+      {s && !editing && (
+        <ServiceDetails service={s} onRemoveFile={removeFile} actions={
+          <Group gap="xs">
+            <Button size="compact-sm" variant="default" leftSection={<IconPencil size={14} />}
+              onClick={() => setEditing(true)}>Edit</Button>
+            {confirmDelete ? (
+              <>
+                <Button size="compact-sm" color="red" onClick={remove}>Delete, including receipts</Button>
+                <Button size="compact-sm" variant="subtle" onClick={() => setConfirmDelete(false)}>Keep</Button>
+              </>
+            ) : (
+              <Button size="compact-sm" variant="subtle" color="red" leftSection={<IconTrash size={14} />}
+                onClick={() => setConfirmDelete(true)}>Delete</Button>
+            )}
+          </Group>
+        } />
+      )}
+    </Drawer>
+  );
+}
+
+function ServiceDetails({ service, actions, onRemoveFile }: {
+  service: Service; actions: ReactNode; onRemoveFile: (id: number) => void;
+}) {
+  return (
         <Stack>
+          {actions}
           <Group gap="xl">
             <div><Text size="xs" c="dimmed">Odometer</Text><Text>{km(service.odometer_km)}</Text></div>
             <div><Text size="xs" c="dimmed">Cost</Text><Text>{money(service.cost_cents)}</Text></div>
@@ -32,7 +156,10 @@ export function ServiceDrawer({ service, onClose }: { service: Service | null; o
             <Stack key={a.id} gap={4}>
               <Group justify="space-between">
                 <Text size="sm">{a.orig_name}</Text>
-                <Anchor size="sm" href={`/api/v1/attachments/${a.id}?download=true`}>Download</Anchor>
+                <Group gap="sm">
+                  <Anchor size="sm" href={`/api/v1/attachments/${a.id}?download=true`}>Download</Anchor>
+                  <Anchor size="sm" c="red" component="button" onClick={() => onRemoveFile(a.id)}>Remove</Anchor>
+                </Group>
               </Group>
               {a.mime.startsWith("image/") && a.mime !== "image/heic" ? (
                 <Image src={`/api/v1/attachments/${a.id}`} alt={a.orig_name} radius="sm" />
@@ -45,8 +172,6 @@ export function ServiceDrawer({ service, onClose }: { service: Service | null; o
             </Stack>
           ))}
         </Stack>
-      )}
-    </Drawer>
   );
 }
 

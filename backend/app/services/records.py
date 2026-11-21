@@ -71,12 +71,43 @@ def log_service(db: Session, vehicle_id: int, on: date, odometer_km: int | None,
     rec.items = [m.ServiceRecordItem(service_type_id=t, cost_cents=c) for t, c in items]
     db.add(rec)
     db.flush()
-    cur = odometer.current_km(db, vehicle_id)
-    if odometer_km is not None and (cur is None or odometer_km > cur):
-        at = now_utc() if on == today_local() else datetime.combine(on, time(12), tzinfo=tz())
-        odometer.add_reading(db, vehicle_id, odometer_km, source="service", recorded_at=at, commit=False)
+    if odometer_km is not None:
+        _count_as_reading(db, vehicle_id, on, odometer_km)
     if commit:
         db.commit()
+    return rec
+
+
+def _count_as_reading(db: Session, vehicle_id: int, on: date, km: int) -> None:
+    """A service km above the current odometer is also an odometer reading."""
+    cur = odometer.current_km(db, vehicle_id)
+    if cur is None or km > cur:
+        at = now_utc() if on == today_local() else datetime.combine(on, time(12), tzinfo=tz())
+        odometer.add_reading(db, vehicle_id, km, source="service", recorded_at=at, commit=False)
+
+
+def update_service(db: Session, rec: m.ServiceRecord, changes: dict) -> m.ServiceRecord:
+    """Apply a partial edit. `changes` holds only the fields the user sent (None clears the optional ones).
+    A new type list keeps the split cost of types that stay; a higher odometer also counts as a reading."""
+    if "date" in changes and changes["date"] is not None:
+        rec.date = changes["date"]
+    if "cost_cents" in changes:
+        rec.cost_cents = changes["cost_cents"] or 0
+    if "odometer_km" in changes:
+        rec.odometer_km = changes["odometer_km"]
+    for k in ("vendor", "notes"):
+        if k in changes:
+            setattr(rec, k, changes[k] or None)
+    if changes.get("type_ids") is not None:
+        kept = {i.service_type_id: i.cost_cents for i in rec.items}
+        rec.items = [m.ServiceRecordItem(service_type_id=t, cost_cents=kept.get(t))
+                     for t in dict.fromkeys(changes["type_ids"])]
+    if sum(i.cost_cents or 0 for i in rec.items) > rec.cost_cents:
+        for i in rec.items:  # the split no longer fits the total: share it out evenly again
+            i.cost_cents = None
+    db.flush()
+    if changes.get("odometer_km") is not None:
+        _count_as_reading(db, rec.vehicle_id, rec.date, changes["odometer_km"])
     return rec
 
 

@@ -140,12 +140,51 @@ async def create_service(
     return views.service_out(db, rec)
 
 
+@router.patch("/services/{service_id}", response_model=s.ServiceOut)
+def update_service(service_id: int, body: s.ServicePatch, user: m.User = Depends(current_user),
+                   db: Session = Depends(get_db)):
+    rec = owned_service(db, user, service_id)
+    changes = body.model_dump(exclude_unset=True)
+    if changes.get("date") and changes["date"] > today_local():
+        raise HTTPException(422, "The service date can't be in the future")
+    if changes.get("type_ids") is not None:
+        known = usable_type_ids(db, user)
+        if any(t not in known for t in changes["type_ids"]):
+            raise HTTPException(422, "Unknown service type")
+    records.update_service(db, rec, changes)
+    db.commit()
+    db.refresh(rec)
+    evaluator_hook.after_change(db, user.id)
+    return views.service_out(db, rec)
+
+
+def _existing_paths(atts) -> list:
+    paths = []
+    for att in atts:
+        try:
+            paths.append(records.attachment_path(att))
+        except FileNotFoundError:
+            pass  # already gone from disk; still delete the row
+    return paths
+
+
 @router.delete("/services/{service_id}", status_code=204)
 def delete_service(service_id: int, user: m.User = Depends(current_user), db: Session = Depends(get_db)):
     rec = owned_service(db, user, service_id)
-    paths = [records.attachment_path(att) for att in rec.attachments]
+    paths = _existing_paths(rec.attachments)
     db.delete(rec)
     db.commit()  # first, so a failed commit never leaves rows pointing at deleted files
+    for path in paths:
+        path.unlink(missing_ok=True)
+    evaluator_hook.after_change(db, user.id)
+
+
+@router.delete("/attachments/{attachment_id}", status_code=204)
+def delete_attachment(attachment_id: int, user: m.User = Depends(current_user), db: Session = Depends(get_db)):
+    att = owned_attachment(db, user, attachment_id)
+    paths = _existing_paths([att])
+    db.delete(att)
+    db.commit()
     for path in paths:
         path.unlink(missing_ok=True)
 

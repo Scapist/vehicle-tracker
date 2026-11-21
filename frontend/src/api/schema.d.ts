@@ -411,7 +411,8 @@ export interface paths {
         delete: operations["delete_service_api_v1_services__service_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update Service */
+        patch: operations["update_service_api_v1_services__service_id__patch"];
         trace?: never;
     };
     "/api/v1/vehicles/{vehicle_id}/services": {
@@ -448,23 +449,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/services/{service_id}/attachments": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Add Attachment */
-        post: operations["add_attachment_api_v1_services__service_id__attachments_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/attachments/{attachment_id}": {
         parameters: {
             query?: never;
@@ -476,6 +460,24 @@ export interface paths {
         get: operations["get_attachment_api_v1_attachments__attachment_id__get"];
         put?: never;
         post?: never;
+        /** Delete Attachment */
+        delete: operations["delete_attachment_api_v1_attachments__attachment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/services/{service_id}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Attachment */
+        post: operations["add_attachment_api_v1_services__service_id__attachments_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1370,6 +1372,24 @@ export interface components {
              * @default []
              */
             type_names: string[];
+        };
+        /**
+         * ServicePatch
+         * @description Fields to change on a logged service; leave a field out to keep it. type_ids replaces the list.
+         */
+        ServicePatch: {
+            /** Date */
+            date?: string | null;
+            /** Odometer Km */
+            odometer_km?: number | null;
+            /** Cost Cents */
+            cost_cents?: number | null;
+            /** Vendor */
+            vendor?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /** Type Ids */
+            type_ids?: number[] | null;
         };
         /** ServiceTypeIn */
         ServiceTypeIn: {
@@ -2576,6 +2596,41 @@ export interface operations {
             };
         };
     };
+    update_service_api_v1_services__service_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                service_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServicePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_services_api_v1_vehicles__vehicle_id__services_get: {
         parameters: {
             query?: never;
@@ -2640,6 +2695,68 @@ export interface operations {
             };
         };
     };
+    get_attachment_api_v1_attachments__attachment_id__get: {
+        parameters: {
+            query?: {
+                download?: boolean;
+            };
+            header?: never;
+            path: {
+                attachment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_attachment_api_v1_attachments__attachment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     add_attachment_api_v1_services__service_id__attachments_post: {
         parameters: {
             query?: never;
@@ -2662,39 +2779,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AttachmentOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_attachment_api_v1_attachments__attachment_id__get: {
-        parameters: {
-            query?: {
-                download?: boolean;
-            };
-            header?: never;
-            path: {
-                attachment_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
