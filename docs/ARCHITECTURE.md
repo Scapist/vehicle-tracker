@@ -80,7 +80,8 @@ Decisions worth noticing:
 
 - **Money is integer cents** (`cost_cents`), never a float. Floats can't represent 0.10 exactly.
 - **The odometer is a history, not a single number.** Current km is the latest valid reading. The history makes
-  the km/day estimate possible. A correction doesn't delete anything: it marks higher readings `invalidated`.
+  the km/day estimate possible; the km of logged services count as history points too (`odometer.domain_readings`),
+  except any above the current reading. A correction doesn't delete anything: it marks higher readings `invalidated`.
 - **One visit, many jobs.** `ServiceRecordItem` is a join table: one visit (oil change plus rotation) links to
   several service types, each with an optional cost.
 - **Times are stored in UTC and shown in local time** (`app/clock.py`). Mixed time zones in storage cause

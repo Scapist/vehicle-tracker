@@ -25,7 +25,18 @@ def current_km(db: Session, vehicle_id: int) -> int | None:
 
 
 def domain_readings(db: Session, vehicle_id: int) -> list[Reading]:
-    return [Reading(as_local_date(r.recorded_at), r.km) for r in valid_readings(db, vehicle_id)]
+    """Dated km points for the km/day estimate: odometer readings plus the km of logged services, which are
+    driving history too (often the only history when old services are entered after the car is added).
+    Service km above the current reading are left out: they're typos or were undone by a correction."""
+    rs = valid_readings(db, vehicle_id)
+    points = [Reading(as_local_date(r.recorded_at), r.km) for r in rs]
+    if rs:
+        cur = rs[-1].km
+        points += [Reading(d, km) for d, km in db.execute(
+            select(m.ServiceRecord.date, m.ServiceRecord.odometer_km)
+            .where(m.ServiceRecord.vehicle_id == vehicle_id, m.ServiceRecord.odometer_km.is_not(None),
+                   m.ServiceRecord.odometer_km <= cur))]
+    return points
 
 
 def add_reading(db: Session, vehicle_id: int, km: int, source: str = "ui", is_correction: bool = False,

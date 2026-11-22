@@ -50,7 +50,8 @@ An AI assistant can do steps 1 to 5 for you; see [Setting up with an AI assistan
 year and optionally the VIN.
 
 **Odometer readings** feed the km-based reminders: the app estimates when a km limit will be reached from your
-average km/day over the last 90 days. Log a reading whenever it's convenient:
+average km/day over the last 90 days (the km of your logged services count too). Log a reading whenever it's
+convenient:
 
 - the vehicle's **Odometer** tab, or **Quick log** (the button at the bottom right);
 - text the number to the chat bot (`84500`);

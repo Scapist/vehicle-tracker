@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from app import mcp_setup as ms
 from app import models as m
+from app.services import records
 from mcp.server.mcpserver.exceptions import ToolError
 from tests.conftest import TODAY, make_user
 
@@ -17,7 +18,16 @@ def test_set_up_a_vehicle_from_scratch(db, user):
 
     r = ms.add_reminder_impl(db, user, "civic", "oil change", every_km=8000, every_months=12,
                              last_done_date=TODAY - dt.timedelta(days=60), last_done_km=80_000)
-    assert r["service"] == "Oil change" and r["every"] == "8,000 km or 12 months" and r["note"] is None
+    assert r["service"] == "Oil change" and r["every"] == "8,000 km or 12 months" and r["status"] == "ok"
+    assert "note" not in r
+    r = ms.add_reminder_impl(db, user, "Civic", "Brake fluid", every_months=30)
+    assert r["status"] == "unknown" and "ask the user" in r["note"]
+    # a service already logged counts as "last done", without giving it again
+    rotation = db.scalar(select(m.ServiceType).where(m.ServiceType.name == "Tire rotation"))
+    records.log_service(db, v["vehicle_id"], TODAY - dt.timedelta(days=30), 84_000, 0, None, None,
+                        [(rotation.id, None)])
+    r = ms.add_reminder_impl(db, user, "Civic", "Tire rotation", every_km=10_000)
+    assert r["status"] == "ok" and "note" not in r
     with pytest.raises(ToolError, match="already has a rule"):
         ms.add_reminder_impl(db, user, "Civic", "Oil change", every_km=5000)
     with pytest.raises(ToolError, match="km interval, a months interval"):

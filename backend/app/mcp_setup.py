@@ -18,7 +18,7 @@ from app import schemas as s
 from app.api.deps import visible_service_types
 from app.clock import today_local
 from app.mcp_server import _session, _user, find_vehicle, mcp
-from app.services import odometer
+from app.services import odometer, status
 
 DATE_KINDS = {"registration": "Registration renewal", "insurance": "Insurance renewal", "custom": None}
 SEASONS = ("winter", "summer", "all_season")
@@ -83,9 +83,14 @@ def add_reminder_impl(db, user: m.User, vehicle: str, service: str, every_km: in
                                           baseline_km=last_done_km), user=user, db=db)
     every = " or ".join(x for x in (f"{every_km:,} km" if every_km else "", f"{every_months} months"
                                     if every_months else "") if x)
-    return {"reminder_id": rule.id, "vehicle": v.nickname, "service": t.name, "every": every,
-            "note": None if (last_done_date or last_done_km) else
-            "With no 'last done' date or km and no logged service, this shows as Unknown until one is logged."}
+    # report what the app actually works out, which also counts services already logged for this type
+    item = next((i for i in status.all_items(db, today_local(), user_id=user.id)
+                 if i.subject == f"rule:{rule.id}"), None)
+    out = {"reminder_id": rule.id, "vehicle": v.nickname, "service": t.name, "every": every,
+           "status": item.status if item else None, "detail": item.detail if item else None}
+    if item and item.status == "unknown":
+        out["note"] = "Nothing logged for this service and no last-done date or km given; ask the user if they know."
+    return out
 
 
 def add_date_impl(db, user: m.User, kind: str, due_date: date, vehicle: str | None = None, title: str | None = None,
