@@ -106,3 +106,10 @@ def test_odometer_backwards_rejected_unless_correction():
     assert check_odometer(84500, 84500, False) is None
     assert check_odometer(None, 100, False) is None
     assert check_odometer(None, -1, True) is not None
+
+
+def test_dates_show_the_year_only_when_it_is_not_this_year():
+    from app.domain.status import fmt_date
+    assert fmt_date(date(2026, 12, 1), TODAY) == "Dec 1"
+    assert fmt_date(date(2031, 10, 28), TODAY) == "Oct 28, 2031"
+    assert fmt_date(date(2025, 9, 23), TODAY) == "Sep 23, 2025"
