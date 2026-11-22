@@ -5,6 +5,7 @@ export type Vehicle = S["VehicleOut"];
 export type Dashboard = S["DashboardOut"];
 export type StatusItem = S["StatusItemOut"];
 export type Service = S["ServiceOut"];
+export type Attachment = S["AttachmentOut"];
 export type ServiceType = S["ServiceTypeOut"];
 export type Odometer = S["OdometerOut"];
 export type Rule = S["RuleOut"];
