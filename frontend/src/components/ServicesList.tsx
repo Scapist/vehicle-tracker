@@ -1,5 +1,5 @@
 import {
-  Anchor, Badge, Button, Card, Drawer, Group, Image, NumberInput, Stack, Table, Text, Textarea, TextInput,
+  Anchor, Badge, Button, Card, Drawer, Group, Image, Modal, NumberInput, Stack, Table, Text, Textarea, TextInput,
   UnstyledButton,
 } from "@mantine/core";
 import { DateInput } from "@mantine/dates";
@@ -122,9 +122,9 @@ export function ServiceDrawer({ service, onClose }: { service: Service | null; o
   }
 
   const s = shown;
-  return (
-    <Drawer opened={!!service} onClose={onClose} position={mobile ? "bottom" : "right"} size={mobile ? "85%" : "lg"}
-      title={s ? `${day(s.date)} · ${work(s)}` : ""}>
+  const title = s ? `${day(s.date)} · ${work(s)}` : "";
+  const body = (
+    <>
       {s && editing && <EditService service={s} onCancel={() => setEditing(false)}
         onSaved={(out) => { setShown(out); setEditing(false); }} />}
       {s && !editing && (
@@ -144,7 +144,13 @@ export function ServiceDrawer({ service, onClose }: { service: Service | null; o
           </Group>
         } />
       )}
-    </Drawer>
+    </>
+  );
+  // a bottom sheet on phones, a centred dialog on bigger screens
+  return mobile ? (
+    <Drawer opened={!!service} onClose={onClose} position="bottom" size="85%" title={title}>{body}</Drawer>
+  ) : (
+    <Modal opened={!!service} onClose={onClose} centered size="lg" title={title}>{body}</Modal>
   );
 }
 
