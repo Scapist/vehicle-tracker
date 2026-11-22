@@ -47,7 +47,7 @@ def queue_nudges(db: Session, today: date | None = None) -> int:
         several = db.scalar(select(m.Vehicle.id).where(m.Vehicle.user_id == v.user_id, m.Vehicle.id != v.id,
                                                        m.Vehicle.archived.is_(False)).limit(1))
         example = f"{v.nickname} {readings[-1].km + 1000:,}" if several else f"{readings[-1].km + 1000:,}"
-        body = (f"Last reading: {readings[-1].km:,} km on {fmt_date(last)} ({days} days ago).\n"
+        body = (f"Last reading: {readings[-1].km:,} km on {fmt_date(last, today)} ({days} days ago).\n"
                 f"Reply with the current number, e.g. \"{example}\", to keep the km reminders accurate.")
         queued += enqueue(db, "vehicle-tracker", f"nudge:{v.id}|{last.isoformat()}|{n}",
                           f"{v.nickname}: what's the odometer at?", body,
