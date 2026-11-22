@@ -196,9 +196,12 @@ test("a logged service can be edited and deleted", async ({ page }, info) => {
   await page.getByText(vendor).filter({ visible: true }).first().click();
   await page.getByRole("button", { name: "Edit" }).click();
   await page.getByLabel("Shop / vendor").fill(`${vendor} fixed`);
+  await page.getByRole("dialog").locator('input[type="file"]').first()
+    .setInputFiles([{ name: "added-later.jpg", mimeType: "image/jpeg", buffer: JPEG }]);
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByText("Service updated")).toBeVisible();
   await expect(page.getByRole("dialog").getByText(`${vendor} fixed`)).toBeVisible();
+  await expect(page.getByRole("dialog").getByText("added-later.jpg")).toBeVisible();
   await page.getByRole("button", { name: "Delete", exact: true }).click();
   await page.getByRole("button", { name: "Delete, including receipts" }).click();
   await expect(page.getByText("Service deleted")).toBeVisible();

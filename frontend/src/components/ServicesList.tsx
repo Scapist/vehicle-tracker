@@ -13,8 +13,9 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { api } from "../api/client";
 import { useInvalidate } from "../api/hooks";
-import type { Service } from "../api/types";
+import type { Attachment, Service } from "../api/types";
 import { day, isoDate, km, money, toCents } from "../lib/format";
+import { FilePicker } from "./QuickLog";
 import { ServiceTypeMultiPicker } from "./ServiceTypePicker";
 import { notifyError } from "./status";
 
@@ -33,6 +34,7 @@ function EditService({ service, onSaved, onCancel }: {
   const [cost, setCost] = useState<number | string>(service.cost_cents / 100);
   const [vendor, setVendor] = useState(service.vendor ?? "");
   const [notes, setNotes] = useState(service.notes ?? "");
+  const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const invalidate = useInvalidate();
 
@@ -46,6 +48,12 @@ function EditService({ service, onSaved, onCancel }: {
           vendor, notes, type_ids: typeIds.map(Number),
         },
       });
+      for (const f of files) {
+        const fd = new FormData();
+        fd.set("file", f);
+        out.attachments.push(await api<Attachment>(`/services/${service.id}/attachments`, { method: "POST", body: fd }));
+        setFiles((left) => left.filter((x) => x !== f)); // a retry after a failure won't upload it twice
+      }
       await invalidate();
       onSaved(out);
       notifications.show({ color: "green", message: "Service updated" });
@@ -69,6 +77,7 @@ function EditService({ service, onSaved, onCancel }: {
         <TextInput label="Shop / vendor" value={vendor} onChange={(e) => setVendor(e.currentTarget.value)} />
       </Group>
       <Textarea label="Notes" autosize minRows={2} value={notes} onChange={(e) => setNotes(e.currentTarget.value)} />
+      <FilePicker files={files} setFiles={setFiles} />
       <Group justify="flex-end">
         <Button variant="default" onClick={onCancel}>Cancel</Button>
         <Button onClick={save} loading={busy} disabled={!date}>Save changes</Button>

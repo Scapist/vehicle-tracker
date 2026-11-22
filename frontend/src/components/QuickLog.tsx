@@ -117,7 +117,7 @@ export function MileageForm({ vehicles, initial, onDone }: FormProps) {
   );
 }
 
-function FilePicker({ files, setFiles }: { files: File[]; setFiles: (f: File[]) => void }) {
+export function FilePicker({ files, setFiles }: { files: File[]; setFiles: (f: File[]) => void }) {
   const add = (f: File[] | File | null) => f && setFiles([...files, ...(Array.isArray(f) ? f : [f])]);
   return (
     <Stack gap={4}>
